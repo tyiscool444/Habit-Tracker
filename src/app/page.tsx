@@ -4,12 +4,13 @@ import { useState } from 'react';
 import { useHabits } from '../hooks/useHabits';
 import { HabitForm } from '../components/HabitForm';
 import { HabitCard } from '../components/HabitCard';
-import { PlusCircle } from 'lucide-react';
+import { PlusCircle, CalendarDays } from 'lucide-react';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 
 export default function Home() {
   const router = useRouter();
-  const { habits, addHabit, isLoaded } = useHabits();
+  const { habits, addHabit, setLog, isLoaded } = useHabits();
   const [showForm, setShowForm] = useState(false);
 
   if (!isLoaded) return <div className="min-h-screen bg-black" />;
@@ -22,13 +23,22 @@ export default function Home() {
             <h1 className="text-4xl font-extrabold tracking-tight">Habit Tracker</h1>
             <p className="text-gray-400 mt-2">Build good habits, quit bad ones.</p>
           </div>
-          <button 
-            onClick={() => setShowForm(true)}
-            className="flex items-center gap-2 bg-blue-600 hover:bg-blue-500 text-white px-5 py-3 rounded-full font-semibold transition shadow-lg shadow-blue-500/20"
-          >
-            <PlusCircle size={20} />
-            New Habit
-          </button>
+          <div className="flex items-center gap-3">
+            <Link 
+              href="/calendar"
+              className="flex items-center gap-2 bg-gray-800 hover:bg-gray-700 text-white px-5 py-3 rounded-full font-semibold transition"
+            >
+              <CalendarDays size={20} />
+              <span className="hidden sm:inline">Overview</span>
+            </Link>
+            <button 
+              onClick={() => setShowForm(true)}
+              className="flex items-center gap-2 bg-blue-600 hover:bg-blue-500 text-white px-5 py-3 rounded-full font-semibold transition shadow-lg shadow-blue-500/20"
+            >
+              <PlusCircle size={20} />
+              <span className="hidden sm:inline">New Habit</span>
+            </button>
+          </div>
         </header>
 
         {showForm ? (
@@ -49,12 +59,13 @@ export default function Home() {
             <p className="text-gray-500 mt-2 max-w-md mx-auto">Click "New Habit" to start tracking your progress. You can track things you want to build or quit.</p>
           </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          <div className="flex flex-col gap-4">
             {habits.map(habit => (
               <HabitCard 
                 key={habit.id} 
                 habit={habit} 
                 onClick={() => router.push(`/habit/${habit.id}`)} 
+                onLog={setLog.bind(null, habit.id)}
               />
             ))}
           </div>

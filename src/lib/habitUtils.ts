@@ -83,18 +83,22 @@ export function checkPeriodPerfect(habit: Habit, start: Date, end: Date): boolea
 }
 
 /**
- * checkPeriodSuccess is an alias for perfect — used for "failed" counting.
- */
-export function checkPeriodSuccess(habit: Habit, start: Date, end: Date): boolean {
-  return checkPeriodPerfect(habit, start, end);
-}
-
-/**
  * Calculates stats for a given habit including streak and perfectStreak.
  */
 export function calculateHabitStats(habit: Habit): HabitStats {
   const today = new Date();
-  const startDate = parseISO(habit.startDate);
+  let startDate = parseISO(habit.startDate);
+
+  const logDates = Object.keys(habit.logs);
+  if (logDates.length > 0) {
+    const earliestLogDate = logDates.reduce((earliest, current) => 
+      isBefore(parseISO(current), parseISO(earliest)) ? current : earliest
+    );
+    const earliest = parseISO(earliestLogDate);
+    if (isBefore(earliest, startDate)) {
+      startDate = earliest;
+    }
+  }
 
   if (isBefore(today, startDate)) {
     return { currentStreak: 0, perfectStreak: 0, failedPeriodsSinceStart: 0, totalPeriods: 0 };
@@ -182,4 +186,31 @@ export function getDayCellVisuals(habit: Habit, day: Date) {
     const ratio = amount / Math.max(habit.quota, 1);
     return { opacity: 0.3 + ratio * 0.5, isGold: false, isRed: false, amount, isFuture: false };
   }
+}
+
+/**
+ * Calculates the set of dates that are part of the currently active gold streak.
+ * A gold streak goes backwards from today. Today can be pending (not gold) without breaking it.
+ */
+export function getCurrentGoldStreakDates(habit: Habit): Set<string> {
+  const goldDates = new Set<string>();
+  const today = new Date();
+  
+  let i = 0;
+  while (true) {
+    const d = addDays(today, -i);
+    const { isGold } = getDayCellVisuals(habit, d);
+    
+    if (isGold) {
+      goldDates.add(normalizeDateStr(d));
+    } else {
+      if (i > 0) {
+        break; // Streak is broken by a past day that wasn't gold
+      }
+    }
+    i++;
+    if (i > 5000) break; // Safety limit
+  }
+  
+  return goldDates;
 }

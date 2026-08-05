@@ -26,7 +26,7 @@ export function HabitForm({ onSave, onCancel }: Props) {
   const [unit, setUnit] = useState<HabitUnit>('amount');
   const [quota, setQuota] = useState(1);
   const [timeframe, setTimeframe] = useState<Timeframe>('daily');
-  const [startDate, setStartDate] = useState(new Date().toISOString().split('T')[0]);
+  const [startDate] = useState(new Date().toISOString().split('T')[0]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -108,15 +108,6 @@ export function HabitForm({ onSave, onCancel }: Props) {
               value={quota} onChange={e => setQuota(parseFloat(e.target.value) || 0)}
             />
           </div>
-        </div>
-
-        <div>
-          <label className="block text-sm font-medium text-gray-400 mb-1">Start Date</label>
-          <input 
-            type="date" required
-            className="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-blue-500"
-            value={startDate} onChange={e => setStartDate(e.target.value)}
-          />
         </div>
 
         <div>

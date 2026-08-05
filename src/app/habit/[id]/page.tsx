@@ -3,8 +3,8 @@
 import { useState, useRef, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { useHabits } from '../../../hooks/useHabits';
-import { getDayCellVisuals, normalizeDateStr, calculateHabitStats, unitLabel } from '../../../lib/habitUtils';
-import { ArrowLeft, Flame, Target, CalendarDays, Award, ChevronLeft, ChevronRight, Star } from 'lucide-react';
+import { getDayCellVisuals, normalizeDateStr, calculateHabitStats, unitLabel, getCurrentGoldStreakDates, getAmountInInterval } from '../../../lib/habitUtils';
+import { ArrowLeft, Target, CalendarDays, Award, ChevronLeft, ChevronRight, Star, PieChart } from 'lucide-react';
 import {
   startOfDay, endOfDay, startOfWeek, endOfWeek, startOfMonth, endOfMonth,
   eachDayOfInterval, format, isBefore, isAfter, isSameMonth, isToday,
@@ -54,7 +54,26 @@ export default function HabitCalendarPage() {
   const calendarEnd = endOfWeek(monthEnd);
   const days = eachDayOfInterval({ start: calendarStart, end: calendarEnd });
 
+  // Calculate % of month completed
+  const daysInMonthForStats = eachDayOfInterval({ start: monthStart, end: monthEnd });
+  let totalMonthScore = 0;
+  daysInMonthForStats.forEach(d => {
+    const isFuture = isAfter(startOfDay(d), endOfDay(now));
+    const amt = getAmountInInterval(habit.logs, startOfDay(d), endOfDay(d));
+    if (habit.type === 'START') {
+      totalMonthScore += Math.min(amt / habit.quota, 1);
+    } else {
+      if (!isFuture) {
+        totalMonthScore += Math.max(0, 1 - (amt / habit.quota));
+      }
+    }
+  });
+  const monthCompletionPct = daysInMonthForStats.length > 0 
+    ? Math.round((totalMonthScore / daysInMonthForStats.length) * 100)
+    : 0;
+
   const ul = unitLabel(habit.unit);
+  const currentGoldDates = getCurrentGoldStreakDates(habit);
 
   const openInput = (dateStr: string, currentAmount: number) => {
     setActiveInput(dateStr);
@@ -107,9 +126,9 @@ export default function HabitCalendarPage() {
         {/* Stats Row — now 5 cards */}
         <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
           <div className="bg-gray-900/40 border border-gray-800/50 rounded-2xl p-4 flex flex-col items-center justify-center text-center shadow-lg">
-            <Flame className="w-5 h-5 text-orange-500 mb-1.5" />
-            <span className="text-2xl md:text-3xl font-bold text-white">{stats.currentStreak}</span>
-            <span className="text-[10px] text-gray-400 font-medium uppercase tracking-wider mt-1">Streak</span>
+            <PieChart className="w-5 h-5 text-purple-500 mb-1.5" />
+            <span className="text-2xl md:text-3xl font-bold text-white">{monthCompletionPct}%</span>
+            <span className="text-[10px] text-gray-400 font-medium uppercase tracking-wider mt-1">Month %</span>
           </div>
           <div className="bg-gray-900/40 border border-yellow-500/20 rounded-2xl p-4 flex flex-col items-center justify-center text-center shadow-lg">
             <Star className="w-5 h-5 text-yellow-400 mb-1.5" />
@@ -174,7 +193,12 @@ export default function HabitCalendarPage() {
               const isInputOpen = activeInput === dateStr;
 
               const visuals = getDayCellVisuals(habit, day);
-              const { opacity, isGold, isRed, amount } = visuals;
+              let { opacity, isGold, isRed, amount } = visuals;
+
+              // Only apply gold streak if it's currently going
+              if (isGold && !currentGoldDates.has(dateStr)) {
+                isGold = false;
+              }
 
               // Only future cells are non-interactive — past days (even before startDate) are clickable
               const disabled = isFutureCell;
@@ -230,22 +254,25 @@ export default function HabitCalendarPage() {
                     />
                   ) : (
                     <>
-                      {/* Default: day number */}
+                      {/* Top-left: Unit */}
+                      {ul !== 'x' && (
+                        <span className="absolute top-1.5 left-1.5 text-[8px] md:text-[9px] font-medium opacity-60 tracking-wider">
+                          {ul}
+                        </span>
+                      )}
+                      {/* Center: Amount / Quota */}
+                      <span className="absolute inset-0 flex items-center justify-center text-[10px] md:text-xs font-bold opacity-90 leading-none">
+                        {amount}/{habit.quota}
+                      </span>
+                      {/* Top-right: Date */}
                       <span
                         className={`
-                          text-sm md:text-base font-semibold transition-opacity duration-150
-                          ${!disabled ? 'group-hover:opacity-0' : ''}
-                          ${isToday(day) ? 'underline decoration-2 underline-offset-4' : ''}
+                          absolute top-1.5 right-1.5 text-[10px] md:text-xs font-bold leading-none
+                          ${isToday(day) ? 'text-white underline decoration-2 underline-offset-2' : ''}
                         `}
                       >
                         {format(day, 'd')}
                       </span>
-                      {/* Hover overlay: amt/quota */}
-                      {!disabled && (
-                        <span className="absolute inset-0 flex items-center justify-center text-[10px] md:text-[11px] font-bold opacity-0 group-hover:opacity-100 transition-opacity duration-150 leading-tight text-center px-0.5">
-                          {amount}{ul}/{habit.quota}{ul}
-                        </span>
-                      )}
                     </>
                   )}
                 </div>
