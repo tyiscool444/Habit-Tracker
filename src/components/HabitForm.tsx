@@ -50,11 +50,11 @@ export function HabitForm({ onSave, onCancel }: Props) {
   return (
     <div className="bg-gray-900 border border-gray-800 p-6 rounded-xl w-full max-w-lg mx-auto shadow-2xl">
       <h2 className="text-2xl font-bold text-white mb-6">Create New Habit</h2>
-      
+
       <form onSubmit={handleSubmit} className="space-y-5">
         <div>
           <label className="block text-sm font-medium text-gray-400 mb-1">Habit Name</label>
-          <input 
+          <input
             type="text" required
             className="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-blue-500"
             value={name} onChange={e => setName(e.target.value)}
@@ -65,7 +65,7 @@ export function HabitForm({ onSave, onCancel }: Props) {
         <div className="grid grid-cols-2 gap-4">
           <div>
             <label className="block text-sm font-medium text-gray-400 mb-1">Type</label>
-            <select 
+            <select
               className="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-blue-500"
               value={type} onChange={e => setType(e.target.value as HabitType)}
             >
@@ -75,7 +75,7 @@ export function HabitForm({ onSave, onCancel }: Props) {
           </div>
           <div>
             <label className="block text-sm font-medium text-gray-400 mb-1">Timeframe</label>
-            <select 
+            <select
               className="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-blue-500"
               value={timeframe} onChange={e => setTimeframe(e.target.value as Timeframe)}
             >
@@ -102,7 +102,7 @@ export function HabitForm({ onSave, onCancel }: Props) {
             <label className="block text-sm font-medium text-gray-400 mb-1">
               {isStop ? 'Allowance' : 'Quota'} per {timeframe}
             </label>
-            <input 
+            <input
               type="number" min={isStop ? '0' : '1'} step="any" required
               className="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-blue-500"
               value={quota} onChange={e => setQuota(parseFloat(e.target.value) || 0)}
@@ -140,13 +140,13 @@ export function HabitForm({ onSave, onCancel }: Props) {
         </div>
 
         <div className="flex justify-end gap-3 mt-8">
-          <button 
+          <button
             type="button" onClick={onCancel}
             className="px-5 py-2 rounded-lg font-medium text-gray-300 hover:text-white hover:bg-gray-800 transition"
           >
             Cancel
           </button>
-          <button 
+          <button
             type="submit"
             className="px-5 py-2 rounded-lg font-medium bg-blue-600 text-white hover:bg-blue-500 transition"
           >
