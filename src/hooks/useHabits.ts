@@ -31,6 +31,10 @@ export function useHabits() {
     setHabits((prev) => [...prev, newHabit]);
   };
 
+  const updateHabit = (updatedHabit: Habit) => {
+    setHabits((prev) => prev.map(h => h.id === updatedHabit.id ? updatedHabit : h));
+  };
+
   const deleteHabit = (id: string) => {
     setHabits((prev) => prev.filter(h => h.id !== id));
   };
@@ -54,5 +58,5 @@ export function useHabits() {
     }));
   };
 
-  return { habits, addHabit, deleteHabit, setLog, isLoaded };
+  return { habits, addHabit, updateHabit, deleteHabit, setLog, isLoaded };
 }

@@ -8,7 +8,7 @@ import { ArrowLeft, Target, CalendarDays, Award, ChevronLeft, ChevronRight, Star
 import {
   startOfDay, endOfDay, startOfWeek, endOfWeek, startOfMonth, endOfMonth,
   eachDayOfInterval, format, isBefore, isAfter, isSameMonth, isToday,
-  addMonths, subMonths,
+  addMonths, subMonths, addDays
 } from 'date-fns';
 
 export default function HabitCalendarPage() {
@@ -195,9 +195,30 @@ export default function HabitCalendarPage() {
               const visuals = getDayCellVisuals(habit, day);
               let { opacity, isGold, isRed, amount } = visuals;
 
-              // Only apply gold streak if it's currently going
-              if (isGold && !currentGoldDates.has(dateStr)) {
-                isGold = false;
+              if (habit.timeframe === 'weekly') {
+                const weekStartDay = startOfWeek(day, { weekStartsOn: 1 });
+                let weeklyAmount = 0;
+                for (let i = 0; i < 7; i++) {
+                   weeklyAmount += habit.logs[normalizeDateStr(addDays(weekStartDay, i))] || 0;
+                }
+                const isWeeklyMet = habit.type === 'START' ? weeklyAmount >= habit.quota : weeklyAmount <= habit.quota;
+                
+                if (isWeeklyMet && habit.type === 'START') {
+                   isGold = true;
+                } else if (isWeeklyMet && habit.type === 'STOP') {
+                   if (isBefore(weekStartDay, now)) {
+                     isGold = true;
+                   } else {
+                     isGold = false;
+                   }
+                } else {
+                   isGold = false;
+                }
+              } else {
+                // Only apply gold streak if it's currently going
+                if (isGold && !currentGoldDates.has(dateStr)) {
+                  isGold = false;
+                }
               }
 
               // Only future cells are non-interactive — past days (even before startDate) are clickable

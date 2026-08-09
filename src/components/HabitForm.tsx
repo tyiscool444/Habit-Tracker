@@ -4,8 +4,10 @@ import { useState } from 'react';
 import { Habit, HabitType, Timeframe, HabitUnit } from '../types';
 
 interface Props {
+  initialHabit?: Habit;
   onSave: (habit: Habit) => void;
   onCancel: () => void;
+  onDelete?: () => void;
 }
 
 const ICONS = ['💪', '🚬', '🍷', '📖', '💻', '❤️', '☕', '🏃', '🧘', '💊', '🥗', '💧'];
@@ -18,20 +20,20 @@ const UNITS: { value: HabitUnit; label: string }[] = [
   { value: 'hours', label: 'Hours (hr)' },
 ];
 
-export function HabitForm({ onSave, onCancel }: Props) {
-  const [name, setName] = useState('');
-  const [icon, setIcon] = useState(ICONS[0]);
-  const [color, setColor] = useState(COLORS[6]);
-  const [type, setType] = useState<HabitType>('START');
-  const [unit, setUnit] = useState<HabitUnit>('amount');
-  const [quota, setQuota] = useState(1);
-  const [timeframe, setTimeframe] = useState<Timeframe>('daily');
-  const [startDate] = useState(new Date().toISOString().split('T')[0]);
+export function HabitForm({ initialHabit, onSave, onCancel, onDelete }: Props) {
+  const [name, setName] = useState(initialHabit?.name || '');
+  const [icon, setIcon] = useState(initialHabit?.icon || ICONS[0]);
+  const [color, setColor] = useState(initialHabit?.color || COLORS[6]);
+  const [type, setType] = useState<HabitType>(initialHabit?.type || 'START');
+  const [unit, setUnit] = useState<HabitUnit>(initialHabit?.unit || 'amount');
+  const [quota, setQuota] = useState(initialHabit?.quota || 1);
+  const [timeframe, setTimeframe] = useState<Timeframe>(initialHabit?.timeframe || 'daily');
+  const [startDate] = useState(initialHabit?.startDate || new Date().toISOString().split('T')[0]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    const newHabit: Habit = {
-      id: Math.random().toString(36).substr(2, 9),
+    const habitToSave: Habit = {
+      id: initialHabit?.id || Math.random().toString(36).substr(2, 9),
       name,
       icon,
       color,
@@ -40,16 +42,18 @@ export function HabitForm({ onSave, onCancel }: Props) {
       quota,
       timeframe,
       startDate,
-      logs: {},
+      logs: initialHabit?.logs || {},
     };
-    onSave(newHabit);
+    onSave(habitToSave);
   };
 
   const isStop = type === 'STOP';
 
   return (
     <div className="bg-gray-900 border border-gray-800 p-6 rounded-xl w-full max-w-lg mx-auto shadow-2xl">
-      <h2 className="text-2xl font-bold text-white mb-6">Create New Habit</h2>
+      <h2 className="text-2xl font-bold text-white mb-6">
+        {initialHabit ? 'Edit Habit' : 'Create New Habit'}
+      </h2>
 
       <form onSubmit={handleSubmit} className="space-y-5">
         <div>
@@ -139,19 +143,29 @@ export function HabitForm({ onSave, onCancel }: Props) {
           </div>
         </div>
 
-        <div className="flex justify-end gap-3 mt-8">
-          <button
-            type="button" onClick={onCancel}
-            className="px-5 py-2 rounded-lg font-medium text-gray-300 hover:text-white hover:bg-gray-800 transition"
-          >
-            Cancel
-          </button>
-          <button
-            type="submit"
-            className="px-5 py-2 rounded-lg font-medium bg-blue-600 text-white hover:bg-blue-500 transition"
-          >
-            Save Habit
-          </button>
+        <div className="flex justify-between items-center mt-8">
+          {initialHabit && onDelete ? (
+            <button
+              type="button" onClick={onDelete}
+              className="px-4 py-2 rounded-lg font-medium text-red-500 hover:bg-red-500/10 transition"
+            >
+              Delete Habit
+            </button>
+          ) : <div />}
+          <div className="flex gap-3">
+            <button
+              type="button" onClick={onCancel}
+              className="px-5 py-2 rounded-lg font-medium text-gray-300 hover:text-white hover:bg-gray-800 transition"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              className="px-5 py-2 rounded-lg font-medium bg-blue-600 text-white hover:bg-blue-500 transition"
+            >
+              {initialHabit ? 'Save Changes' : 'Save Habit'}
+            </button>
+          </div>
         </div>
       </form>
     </div>
