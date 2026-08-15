@@ -41,6 +41,19 @@ export function unitLabel(unit: HabitUnit): string {
 }
 
 /**
+ * Returns the timeframe abbreviation suffix (d, w, m, y) for streaks.
+ */
+export function timeframeSuffix(timeframe: string): string {
+  switch (timeframe) {
+    case 'daily':   return 'd';
+    case 'weekly':  return 'w';
+    case 'monthly': return 'm';
+    case 'yearly':  return 'y';
+    default:        return 'd';
+  }
+}
+
+/**
  * Sums the logged amounts within a specific interval.
  */
 export function getAmountInInterval(logs: Record<string, number>, start: Date, end: Date): number {
@@ -84,6 +97,7 @@ export function checkPeriodPerfect(habit: Habit, start: Date, end: Date): boolea
 
 /**
  * Calculates stats for a given habit including streak and perfectStreak.
+ * Only counts as an active streak if periods are perfect up to the current day/period.
  */
 export function calculateHabitStats(habit: Habit): HabitStats {
   const today = new Date();
@@ -107,27 +121,20 @@ export function calculateHabitStats(habit: Habit): HabitStats {
   let totalPeriods = 0;
   let failedPeriods = 0;
   let currentStreak = 0;
-  let perfectStreak = 0;
   let streakActive = true;
-  let perfectStreakActive = true;
 
   const iterate = (getPeriod: (i: number) => { start: Date; end: Date }, count: number) => {
     for (let i = 0; i < count; i++) {
       const { start, end } = getPeriod(i);
-      const isStreak = checkPeriodStreak(habit, start, end);
       const isPerfect = checkPeriodPerfect(habit, start, end);
 
-      if (isStreak) {
-        if (streakActive) currentStreak++;
+      if (isPerfect) {
+        if (streakActive) {
+          currentStreak++;
+        }
       } else {
         streakActive = false;
         failedPeriods++;
-      }
-
-      if (isPerfect) {
-        if (perfectStreakActive) perfectStreak++;
-      } else {
-        perfectStreakActive = false;
       }
     }
   };
@@ -152,65 +159,5 @@ export function calculateHabitStats(habit: Habit): HabitStats {
     }), totalPeriods);
   }
 
-  return { currentStreak, perfectStreak, failedPeriodsSinceStart: failedPeriods, totalPeriods };
-}
-
-/**
- * Calculates the visual state for a specific day cell in the calendar.
- */
-export function getDayCellVisuals(habit: Habit, day: Date) {
-  const dayStart = startOfDay(day);
-  const dayEnd = endOfDay(day);
-  const now = new Date();
-  const amount = getAmountInInterval(habit.logs, dayStart, dayEnd);
-
-  // Future days — not interactive
-  if (isBefore(now, dayStart)) {
-    return { opacity: 0.08, isGold: false, isRed: false, amount, isFuture: true };
-  }
-
-  if (habit.type === 'START') {
-    if (amount === 0) return { opacity: 0.12, isGold: false, isRed: false, amount, isFuture: false };
-    const ratio = Math.min(amount / habit.quota, 1);
-    const isGold = amount >= habit.quota;
-    return { opacity: 0.2 + ratio * 0.8, isGold, isRed: false, amount, isFuture: false };
-  } else {
-    // STOP habit
-    if (amount === 0) {
-      const isGold = isBefore(dayEnd, now);
-      return { opacity: 1.0, isGold, isRed: false, amount, isFuture: false };
-    }
-    if (amount > habit.quota) {
-      return { opacity: 0.85, isGold: false, isRed: true, amount, isFuture: false };
-    }
-    const ratio = amount / Math.max(habit.quota, 1);
-    return { opacity: 0.3 + ratio * 0.5, isGold: false, isRed: false, amount, isFuture: false };
-  }
-}
-
-/**
- * Calculates the set of dates that are part of the currently active gold streak.
- * A gold streak goes backwards from today. Today can be pending (not gold) without breaking it.
- */
-export function getCurrentGoldStreakDates(habit: Habit): Set<string> {
-  const goldDates = new Set<string>();
-  const today = new Date();
-  
-  let i = 0;
-  while (true) {
-    const d = addDays(today, -i);
-    const { isGold } = getDayCellVisuals(habit, d);
-    
-    if (isGold) {
-      goldDates.add(normalizeDateStr(d));
-    } else {
-      if (i > 0) {
-        break; // Streak is broken by a past day that wasn't gold
-      }
-    }
-    i++;
-    if (i > 5000) break; // Safety limit
-  }
-  
-  return goldDates;
+  return { currentStreak, perfectStreak: currentStreak, failedPeriodsSinceStart: failedPeriods, totalPeriods };
 }

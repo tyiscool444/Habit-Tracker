@@ -26,3 +26,44 @@ input[type="number"]::-webkit-outer-spin-button {
 input[type="number"] {
   -moz-appearance: textfield;
 }
+
+/* Global Scrollbar Suppression */
+*::-webkit-scrollbar,
+.no-scrollbar::-webkit-scrollbar {
+  display: none !important;
+  width: 0 !important;
+  height: 0 !important;
+  background: transparent !important;
+}
+
+*,
+.no-scrollbar {
+  -ms-overflow-style: none !important;
+  scrollbar-width: none !important;
+}
+
+@keyframes cell-fade-in {
+  from {
+    opacity: 0;
+    transform: scale(0.9) translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+.animate-cell-in {
+  animation: cell-fade-in 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  opacity: 0; 
+}
+
+@keyframes svg-fade-in {
+  from { opacity: 0; transform: scale(0.98); }
+  to { opacity: 1; transform: scale(1); }
+}
+.animate-svg-in {
+  animation: svg-fade-in 0.6s ease-out forwards;
+  animation-delay: 0.3s;
+  opacity: 0;
+  transform-origin: center;
+}
