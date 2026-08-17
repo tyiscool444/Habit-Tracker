@@ -34,9 +34,27 @@ export function unitLabel(unit: HabitUnit): string {
   switch (unit) {
     case 'amount':  return 'x';
     case 'grams':   return 'g';
+    case 'kg':      return 'kg';
+    case 'mg':      return 'mg';
     case 'mL':      return 'mL';
+    case 'liters':  return 'L';
+    case 'oz':      return 'oz';
+    case 'cups':    return 'cups';
+    case 'glasses': return 'gls';
+    case 'seconds': return 'sec';
     case 'minutes': return 'min';
     case 'hours':   return 'hr';
+    case 'km':      return 'km';
+    case 'miles':   return 'mi';
+    case 'meters':  return 'm';
+    case 'steps':   return 'steps';
+    case 'cal':     return 'cal';
+    case 'kcal':    return 'kcal';
+    case 'pages':   return 'pgs';
+    case 'sets':    return 'sets';
+    case 'reps':    return 'reps';
+    case 'percent': return '%';
+    default:        return 'x';
   }
 }
 

@@ -10,17 +10,45 @@ interface Props {
   onDelete?: () => void;
 }
 
-const ICONS = ['💪', '🚬', '🍷', '📖', '💻', '❤️', '☕', '🏃', '🧘', '💊', '🥗', '💧'];
+const ICONS = [
+  // Fitness & Health
+  '💪', '🏃', '🚴', '🏊', '🧘', '🏋️', '🥊', '🧗', '⚽', '🏀', '🎾', '👟',
+  // Wellness, Diet & Self-Care
+  '🥗', '💧', '🍎', '🥑', '🥦', '💊', '🫖', '☕', '🛌', '😴', '🧠', '❤️',
+  // Productivity, Learning & Hobbies
+  '📖', '💻', '✍️', '📚', '🎯', '🎨', '🎸', '🎹', '🎧', '⚡', '🔥', '💡',
+  // Mindfulness & Nature
+  '🌿', '🌱', '☀️', '🌙', '🌊', '🌲', '🌸', '🧹', '🧺', '✨', '⭐', '🏆',
+  // Moderation / Quit habits
+  '🚬', '🍷', '🍺', '🍸', '🍬', '🍔', '🍕', '🎮', '📱', '📺', '🛑', '🚫'
+];
 const COLORS = [
   '#ef4444', '#f97316', '#f59e0b', '#84cc16', '#22c55e', '#10b981', '#14b8a6', '#06b6d4', '#0ea5e9', 
   '#3b82f6', '#6366f1', '#8b5cf6', '#a855f7', '#d946ef', '#ec4899', '#f43f5e', '#64748b', '#78716c'
 ];
 const UNITS: { value: HabitUnit; label: string }[] = [
-  { value: 'amount', label: 'Amount (x)' },
-  { value: 'grams', label: 'Grams (g)' },
-  { value: 'mL', label: 'Millilitres (mL)' },
+  { value: 'amount', label: 'Amount / Times (x)' },
   { value: 'minutes', label: 'Minutes (min)' },
   { value: 'hours', label: 'Hours (hr)' },
+  { value: 'seconds', label: 'Seconds (sec)' },
+  { value: 'grams', label: 'Grams (g)' },
+  { value: 'kg', label: 'Kilograms (kg)' },
+  { value: 'mg', label: 'Milligrams (mg)' },
+  { value: 'mL', label: 'Millilitres (mL)' },
+  { value: 'liters', label: 'Litres (L)' },
+  { value: 'oz', label: 'Fluid Ounces (oz)' },
+  { value: 'cups', label: 'Cups (cups)' },
+  { value: 'glasses', label: 'Glasses (gls)' },
+  { value: 'km', label: 'Kilometers (km)' },
+  { value: 'miles', label: 'Miles (mi)' },
+  { value: 'meters', label: 'Meters (m)' },
+  { value: 'steps', label: 'Steps (steps)' },
+  { value: 'cal', label: 'Calories (cal)' },
+  { value: 'kcal', label: 'Kilocalories (kcal)' },
+  { value: 'pages', label: 'Pages (pgs)' },
+  { value: 'sets', label: 'Sets (sets)' },
+  { value: 'reps', label: 'Reps (reps)' },
+  { value: 'percent', label: 'Percentage (%)' },
 ];
 
 export function HabitForm({ initialHabit, onSave, onCancel, onDelete }: Props) {
@@ -119,11 +147,11 @@ export function HabitForm({ initialHabit, onSave, onCancel, onDelete }: Props) {
 
         <div>
           <label className="block text-sm font-medium text-gray-400 mb-2">Icon</label>
-          <div className="flex gap-2 flex-wrap">
+          <div className="flex gap-2 flex-wrap max-h-40 overflow-y-auto p-1 bg-gray-800/40 rounded-xl border border-gray-800">
             {ICONS.map(ic => (
               <button
                 key={ic} type="button"
-                className={`w-10 h-10 rounded-xl text-xl flex items-center justify-center border-2 transition-all ${icon === ic ? 'border-white scale-110' : 'border-transparent bg-gray-800 hover:border-gray-600'}`}
+                className={`w-10 h-10 rounded-xl text-xl flex items-center justify-center border-2 transition-all ${icon === ic ? 'border-white scale-110 bg-gray-700' : 'border-transparent bg-gray-800 hover:border-gray-600'}`}
                 onClick={() => setIcon(ic)}
               >
                 {ic}

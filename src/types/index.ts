@@ -1,6 +1,28 @@
 export type HabitType = 'START' | 'STOP';
 export type Timeframe = 'daily' | 'weekly' | 'monthly';
-export type HabitUnit = 'amount' | 'grams' | 'mL' | 'minutes' | 'hours';
+export type HabitUnit = 
+  | 'amount' 
+  | 'grams' 
+  | 'kg' 
+  | 'mg'
+  | 'mL' 
+  | 'liters' 
+  | 'oz'
+  | 'cups'
+  | 'glasses'
+  | 'seconds' 
+  | 'minutes' 
+  | 'hours' 
+  | 'km' 
+  | 'miles' 
+  | 'meters' 
+  | 'steps' 
+  | 'cal' 
+  | 'kcal' 
+  | 'pages' 
+  | 'sets' 
+  | 'reps' 
+  | 'percent';
 
 export interface Habit {
   id: string;
