@@ -3,7 +3,7 @@
 import { Habit } from '../types';
 import { calculateHabitStats, unitLabel, normalizeDateStr, getAmountInInterval, timeframeSuffix } from '../lib/habitUtils';
 import { useMemo, useState } from 'react';
-import { Plus, Minus, Flame, Check } from 'lucide-react';
+import { Plus, Minus, Flame, Check, ChevronUp, ChevronDown, BarChart2 } from 'lucide-react';
 import { startOfWeek, endOfWeek, addDays, startOfMonth, endOfMonth, isBefore, isSameDay, startOfDay, format } from 'date-fns';
 
 interface Props {
@@ -15,8 +15,13 @@ interface Props {
   showNumbers?: boolean;
   groupingEnabled?: boolean;
   showBorders?: boolean;
+  canMoveUp?: boolean;
+  canMoveDown?: boolean;
+  onMoveUp?: () => void;
+  onMoveDown?: () => void;
   onLog: (date: string, amount: number) => void;
   onEdit?: () => void;
+  onOpenInsights?: () => void;
   onSelectDate: (date: Date) => void;
 }
 
@@ -36,8 +41,13 @@ export function HabitCard({
   showNumbers = true,
   groupingEnabled = true,
   showBorders = false,
+  canMoveUp = false,
+  canMoveDown = false,
+  onMoveUp,
+  onMoveDown,
   onLog,
   onEdit,
+  onOpenInsights,
   onSelectDate
 }: Props) {
   const stats = useMemo(() => calculateHabitStats(habit), [habit]);
@@ -52,7 +62,10 @@ export function HabitCard({
   const todayStart = startOfDay(new Date());
 
   let timeframeAmount = activeAmount;
-  if (habit.timeframe === 'weekly') {
+  if (habit.isRecurring === false) {
+    const targetStr = habit.targetDate || habit.startDate;
+    timeframeAmount = habit.logs[targetStr] || 0;
+  } else if (habit.timeframe === 'weekly') {
     let weeklyAmount = 0;
     for (let i = 0; i < 7; i++) {
       weeklyAmount += habit.logs[normalizeDateStr(addDays(weekStart, i))] || 0;
@@ -70,7 +83,7 @@ export function HabitCard({
       isComplete = true;
     }
   } else {
-    if (timeframeAmount === 0) {
+    if (timeframeAmount <= habit.quota) {
       isComplete = true;
     }
   }
@@ -83,115 +96,66 @@ export function HabitCard({
       const day = weekDays[0] || selectedDate;
       const dayStr = normalizeDateStr(day);
       const amt = habit.logs[dayStr] || 0;
-      const isComp = habit.type === 'START' ? amt >= habit.quota : amt === 0;
+      const isComp = habit.type === 'START' ? amt >= habit.quota : amt <= habit.quota;
       return [{ days: [day], isComplete: isComp, amount: amt }];
     }
 
-    if (habit.timeframe === 'monthly') {
-      if (viewMode === 'year') {
-        // Partition 365 days into 12 month chunks
-        const chunks: TimeframeChunk[] = [];
-        let currentMonthKey = '';
-        let currentChunk: Date[] = [];
+    if (habit.timeframe === 'monthly' || habit.timeframe === 'weekly') {
+      const isMonthly = habit.timeframe === 'monthly';
+      const isPartitioned = (isMonthly && viewMode === 'year') || (!isMonthly && viewMode !== 'week');
 
-        weekDays.forEach(day => {
-          const mStart = startOfMonth(day);
-          const key = normalizeDateStr(mStart);
-          if (key !== currentMonthKey) {
-            if (currentChunk.length > 0) {
-              const start = startOfMonth(currentChunk[0]);
-              const end = endOfMonth(currentChunk[0]);
-              const amt = getAmountInInterval(habit.logs, start, end);
-              const isComp = habit.type === 'START' ? amt >= habit.quota : (amt === 0 && !isBefore(todayStart, start));
-              chunks.push({ days: currentChunk, isComplete: isComp, amount: amt, label: `${amt}/${habit.quota}` });
-            }
-            currentMonthKey = key;
-            currentChunk = [day];
-          } else {
-            currentChunk.push(day);
-          }
-        });
-
-        if (currentChunk.length > 0) {
-          const start = startOfMonth(currentChunk[0]);
-          const end = endOfMonth(currentChunk[0]);
-          const amt = getAmountInInterval(habit.logs, start, end);
-          const isComp = habit.type === 'START' ? amt >= habit.quota : (amt === 0 && !isBefore(todayStart, start));
-          chunks.push({ days: currentChunk, isComplete: isComp, amount: amt, label: `${amt}/${habit.quota}` });
-        }
-
-        return chunks;
-      }
-
-      // viewMode is month, week or day
-      const monthStart = startOfMonth(weekDays[0]);
-      const monthEnd = endOfMonth(weekDays[0]);
-      const amt = getAmountInInterval(habit.logs, monthStart, monthEnd);
-      const isComp = habit.type === 'START' ? amt >= habit.quota : (amt === 0 && !isBefore(todayStart, monthStart));
-      return [{ days: weekDays, isComplete: isComp, amount: amt, label: `${amt}/${habit.quota} ${unitLabel(habit.unit)}` }];
-    }
-
-    if (habit.timeframe === 'weekly') {
-      if (viewMode === 'week') {
-        // All 7 displayed days belong to this 1 week
-        const wStart = startOfWeek(weekDays[0], { weekStartsOn: 1 });
-        const wEnd = endOfWeek(weekDays[0], { weekStartsOn: 1 });
-        const amt = getAmountInInterval(habit.logs, wStart, wEnd);
-        const isComp = habit.type === 'START' ? amt >= habit.quota : (amt === 0 && !isBefore(todayStart, weekDays[0]));
+      if (!isPartitioned) {
+        // Single chunk across the entire week/month view
+        const start = isMonthly ? startOfMonth(weekDays[0]) : startOfWeek(weekDays[0], { weekStartsOn: 1 });
+        const end = isMonthly ? endOfMonth(weekDays[0]) : endOfWeek(weekDays[0], { weekStartsOn: 1 });
+        const amt = getAmountInInterval(habit.logs, start, end);
+        const isComp = habit.type === 'START' ? amt >= habit.quota : (amt <= habit.quota && !isBefore(todayStart, start));
         return [{ days: weekDays, isComplete: isComp, amount: amt, label: `${amt}/${habit.quota} ${unitLabel(habit.unit)}` }];
-      } else {
-        // Month or Year view: partition days into week chunks
-        const chunks: TimeframeChunk[] = [];
-        let currentWeekKey = '';
-        let currentChunk: Date[] = [];
-
-        weekDays.forEach(day => {
-          const wStart = startOfWeek(day, { weekStartsOn: 1 });
-          const key = normalizeDateStr(wStart);
-          if (key !== currentWeekKey) {
-            if (currentChunk.length > 0) {
-              const start = startOfWeek(currentChunk[0]);
-              const end = endOfWeek(currentChunk[0]);
-              const amt = getAmountInInterval(habit.logs, start, end);
-              const isComp = habit.type === 'START' ? amt >= habit.quota : (amt === 0 && !isBefore(todayStart, currentChunk[0]));
-              chunks.push({ days: currentChunk, isComplete: isComp, amount: amt, label: `${amt}/${habit.quota}` });
-            }
-            currentWeekKey = key;
-            currentChunk = [day];
-          } else {
-            currentChunk.push(day);
-          }
-        });
-
-        if (currentChunk.length > 0) {
-          const start = startOfWeek(currentChunk[0]);
-          const end = endOfWeek(currentChunk[0]);
-          const amt = getAmountInInterval(habit.logs, start, end);
-          const isComp = habit.type === 'START' ? amt >= habit.quota : (amt === 0 && !isBefore(todayStart, currentChunk[0]));
-          chunks.push({ days: currentChunk, isComplete: isComp, amount: amt, label: `${amt}/${habit.quota}` });
-        }
-
-        return chunks;
       }
+
+      // Partitioned chunks across days
+      const chunks: TimeframeChunk[] = [];
+      let currentKey = '';
+      let currentChunk: Date[] = [];
+
+      const pushChunk = (chunkDays: Date[]) => {
+        if (chunkDays.length === 0) return;
+        const start = isMonthly ? startOfMonth(chunkDays[0]) : startOfWeek(chunkDays[0], { weekStartsOn: 1 });
+        const end = isMonthly ? endOfMonth(chunkDays[0]) : endOfWeek(chunkDays[0], { weekStartsOn: 1 });
+        const amt = getAmountInInterval(habit.logs, start, end);
+        const isComp = habit.type === 'START' ? amt >= habit.quota : (amt <= habit.quota && !isBefore(todayStart, start));
+        chunks.push({ days: chunkDays, isComplete: isComp, amount: amt, label: `${amt}/${habit.quota}` });
+      };
+
+      weekDays.forEach(day => {
+        const start = isMonthly ? startOfMonth(day) : startOfWeek(day, { weekStartsOn: 1 });
+        const key = normalizeDateStr(start);
+        if (key !== currentKey) {
+          pushChunk(currentChunk);
+          currentKey = key;
+          currentChunk = [day];
+        } else {
+          currentChunk.push(day);
+        }
+      });
+
+      pushChunk(currentChunk);
+      return chunks;
     }
 
     // Daily habit: each day is its own individual chunk
     return weekDays.map(day => {
       const dayStr = normalizeDateStr(day);
       const amt = habit.logs[dayStr] || 0;
-      const isComp = habit.type === 'START' ? amt >= habit.quota : (amt === 0 && !isBefore(todayStart, day));
+      const isComp = habit.type === 'START' ? amt >= habit.quota : (amt <= habit.quota && !isBefore(todayStart, day));
       return { days: [day], isComplete: isComp, amount: amt };
     });
   }, [weekDays, habit, viewMode, selectedDate, todayStart]);
 
   const handleCellClick = (day: Date, dayStr: string, currentAmount: number) => {
-    // Remove ability to edit future dates
     if (isBefore(todayStart, startOfDay(day))) return;
-
     onSelectDate(day);
-    if (viewMode === 'year') {
-      return;
-    }
+    if (viewMode === 'year') return;
     setEditingDayStr(dayStr);
     setCellInputValue(currentAmount > 0 ? currentAmount.toString() : '');
   };
@@ -224,132 +188,142 @@ export function HabitCard({
 
   const getQuotaBadgeStyle = () => {
     if (habit.type === 'START') {
-      if (timeframeAmount === 0) {
-        return 'bg-red-500/15 text-red-400 border-red-500/30';
-      }
-      if (timeframeAmount < habit.quota) {
-        return 'bg-gray-800/90 text-gray-300 border-gray-700/60';
-      }
+      if (timeframeAmount === 0) return 'bg-red-500/15 text-red-400 border-red-500/30';
+      if (timeframeAmount < habit.quota) return 'bg-gray-800/90 text-gray-300 border-gray-700/60';
       return 'bg-green-500/20 text-green-400 border-green-500/40';
     } else {
-      // STOP habit
-      if (timeframeAmount === 0) {
-        return 'bg-green-500/20 text-green-400 border-green-500/40';
-      }
-      if (timeframeAmount <= habit.quota) {
-        return 'bg-gray-800/90 text-gray-300 border-gray-700/60';
-      }
+      if (timeframeAmount === 0) return 'bg-green-500/20 text-green-400 border-green-500/40';
+      if (timeframeAmount <= habit.quota) return 'bg-gray-800/90 text-gray-300 border-gray-700/60';
       return 'bg-red-500/15 text-red-400 border-red-500/30';
     }
   };
 
+  const isCompactLeft = viewMode === 'month' || viewMode === 'year';
+  const leftColWidthClass = isCompactLeft 
+    ? 'w-14 min-w-[56px] max-w-[56px]' 
+    : (viewMode === 'week' ? 'w-[230px] sm:w-[270px] md:w-[290px] min-w-[220px]' : 'w-[380px] sm:w-[460px] md:w-[520px] min-w-[340px]');
+
+  const quotaBadgeLabel = `${timeframeAmount}/${habit.quota}${unitLabel(habit.unit)}${
+    viewMode === 'day' 
+      ? ` ${habit.isRecurring === false ? 'target' : (habit.timeframe === 'daily' ? 'today' : habit.timeframe === 'weekly' ? 'this week' : 'this month')}` 
+      : ''
+  }`;
+
   return (
     <div className="w-full flex items-stretch bg-[#0c0d10] border-b border-gray-800/80 hover:bg-[#101115] transition-colors group h-[52px]">
-      {/* Left Column (Y-Axis Meta & Controls) - Retains right border to separate from grid */}
-      {viewMode === 'month' || viewMode === 'year' ? (
-        /* Compact icon-only view for Month and Year Modes */
-        <div 
-          onClick={onEdit}
-          className="w-14 min-w-[56px] max-w-[56px] shrink-0 flex items-center justify-center px-3 border-r border-gray-800 cursor-pointer bg-[#0e0f13]/80 group-hover:bg-[#121418] transition-colors h-full"
-          title={`${habit.name} (${habit.type === 'START' ? 'Build' : 'Quit'}) - Click to edit`}
-        >
-          <div
-            className="w-8 h-8 min-w-[32px] min-h-[32px] max-w-[32px] max-h-[32px] rounded flex items-center justify-center text-base shrink-0 select-none"
-            style={{ backgroundColor: `${habit.color}20`, border: `1px solid ${habit.color}40` }}
-          >
-            {habit.icon}
-          </div>
-        </div>
-      ) : viewMode === 'week' ? (
-        /* Weekly View: Icon and Name on left; Quota badge and Streak anchored on right */
-        <div 
-          onClick={onEdit}
-          className="w-[230px] sm:w-[270px] md:w-[290px] min-w-[220px] shrink-0 flex items-center justify-between gap-2 px-3 py-1.5 border-r border-gray-800 cursor-pointer min-w-0 bg-[#0e0f13]/80 group-hover:bg-[#121418] transition-colors h-full"
-          title={`${habit.name} - Click to edit`}
-        >
-          {/* Left: Icon, Name, Checkmark */}
-          <div className="flex items-center gap-2.5 min-w-0 flex-1 mr-1.5">
+      {/* Left Column (Y-Axis Meta & Controls) */}
+      <div 
+        className={`${leftColWidthClass} shrink-0 flex items-center justify-between px-2.5 sm:px-3 border-r border-gray-800 bg-[#0e0f13]/80 group-hover:bg-[#121418] transition-colors h-full`}
+      >
+        {isCompactLeft ? (
+          <div className="flex items-center justify-between w-full">
+            {/* Move arrows in compact view */}
+            <div className="flex flex-col opacity-0 group-hover:opacity-100 transition-opacity">
+              <button
+                type="button"
+                onClick={(e) => { e.stopPropagation(); onMoveUp?.(); }}
+                disabled={!canMoveUp}
+                className="text-gray-500 hover:text-white disabled:opacity-20 disabled:hover:text-gray-500"
+                title="Move up"
+              >
+                <ChevronUp size={10} />
+              </button>
+              <button
+                type="button"
+                onClick={(e) => { e.stopPropagation(); onMoveDown?.(); }}
+                disabled={!canMoveDown}
+                className="text-gray-500 hover:text-white disabled:opacity-20 disabled:hover:text-gray-500"
+                title="Move down"
+              >
+                <ChevronDown size={10} />
+              </button>
+            </div>
+
             <div
-              className="w-8 h-8 min-w-[32px] min-h-[32px] max-w-[32px] max-h-[32px] rounded flex items-center justify-center text-base shrink-0 select-none"
+              onClick={onOpenInsights || onEdit}
+              className="w-8 h-8 min-w-[32px] min-h-[32px] rounded flex items-center justify-center text-base shrink-0 select-none shadow-inner cursor-pointer hover:scale-105 transition"
               style={{ backgroundColor: `${habit.color}20`, border: `1px solid ${habit.color}40` }}
+              title={`${habit.name} - Click for Insights`}
             >
               {habit.icon}
             </div>
+          </div>
+        ) : (
+          <>
+            <div className="flex items-center gap-2 min-w-0 flex-1 mr-2">
+              {/* Up / Down Reorder Handles */}
+              <div className="flex flex-col -space-y-0.5 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
+                <button
+                  type="button"
+                  onClick={(e) => { e.stopPropagation(); onMoveUp?.(); }}
+                  disabled={!canMoveUp}
+                  className="p-0.5 text-gray-500 hover:text-white disabled:opacity-20 disabled:hover:text-gray-500 transition"
+                  title="Move habit up"
+                >
+                  <ChevronUp size={11} />
+                </button>
+                <button
+                  type="button"
+                  onClick={(e) => { e.stopPropagation(); onMoveDown?.(); }}
+                  disabled={!canMoveDown}
+                  className="p-0.5 text-gray-500 hover:text-white disabled:opacity-20 disabled:hover:text-gray-500 transition"
+                  title="Move habit down"
+                >
+                  <ChevronDown size={11} />
+                </button>
+              </div>
 
-            <div className="flex items-center gap-1.5 min-w-0 flex-1">
-              <h3 className="text-xs sm:text-sm font-semibold text-white group-hover:text-blue-400 transition-colors truncate">
-                {habit.name}
-              </h3>
-              {isComplete && (
-                <div className="shrink-0 w-3.5 h-3.5 rounded-full bg-green-500/20 text-green-400 flex items-center justify-center border border-green-500/40" title="Goal Met">
-                  <Check size={9} strokeWidth={3} />
-                </div>
+              {/* Icon (Click to open Insights) */}
+              <div
+                onClick={onOpenInsights || onEdit}
+                className="w-8 h-8 min-w-[32px] min-h-[32px] rounded flex items-center justify-center text-base shrink-0 select-none shadow-inner cursor-pointer hover:scale-105 transition"
+                style={{ backgroundColor: `${habit.color}20`, border: `1px solid ${habit.color}40` }}
+                title="Click for Insights & Trends"
+              >
+                {habit.icon}
+              </div>
+
+              <div className="flex items-center gap-1.5 min-w-0 flex-1">
+                <h3 
+                  onClick={onOpenInsights || onEdit}
+                  className="text-xs sm:text-sm font-semibold text-white hover:text-blue-400 cursor-pointer transition-colors truncate"
+                  title="Click for Insights"
+                >
+                  {habit.name}
+                </h3>
+                {isComplete && (
+                  <div className="shrink-0 w-3.5 h-3.5 rounded-full bg-green-500/20 text-green-400 flex items-center justify-center border border-green-500/40" title="Goal Met">
+                    <Check size={9} strokeWidth={3} />
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <div className="flex items-center gap-1.5 shrink-0 ml-auto">
+              <span 
+                onClick={onEdit}
+                className={`border px-2 py-0.5 rounded text-[10px] sm:text-[11px] font-semibold whitespace-nowrap shrink-0 transition-colors cursor-pointer hover:brightness-125 ${getQuotaBadgeStyle()}`}
+                title="Click to edit quota"
+              >
+                {quotaBadgeLabel}
+              </span>
+
+              {stats.currentStreak > 0 ? (
+                <span 
+                  onClick={onOpenInsights}
+                  className="text-[11px] sm:text-xs font-bold text-orange-400 flex items-center gap-0.5 shrink-0 min-w-[32px] justify-end cursor-pointer hover:scale-105 transition" 
+                  title={`Current Streak: ${stats.currentStreak}${timeframeSuffix(habit.timeframe)} (Click for insights)`}
+                >
+                  <Flame size={11} className="text-orange-500" />
+                  {stats.currentStreak}{timeframeSuffix(habit.timeframe)}
+                </span>
+              ) : (
+                <div className="w-[32px] shrink-0" />
               )}
             </div>
-          </div>
-
-          {/* Right: Anchored Quota badge and Streak */}
-          <div className="flex items-center gap-2 shrink-0 ml-auto">
-            <span className={`border px-1.5 py-0.5 rounded text-[10px] sm:text-[11px] font-semibold whitespace-nowrap shrink-0 transition-colors ${getQuotaBadgeStyle()}`}>
-              {timeframeAmount}/{habit.quota} {unitLabel(habit.unit)}
-            </span>
-
-            {stats.currentStreak > 0 ? (
-              <span className="text-[11px] sm:text-xs font-bold text-orange-400 flex items-center gap-0.5 shrink-0 min-w-[32px] justify-end" title={`Current Streak: ${stats.currentStreak}${timeframeSuffix(habit.timeframe)}`}>
-                <Flame size={11} className="text-orange-500" />
-                {stats.currentStreak}{timeframeSuffix(habit.timeframe)}
-              </span>
-            ) : (
-              <div className="w-[32px] shrink-0" />
-            )}
-          </div>
-        </div>
-      ) : (
-        /* Daily View Left Meta: Wide, spacious, left side has icon & name, right side has anchored info badges and streak */
-        <div 
-          onClick={onEdit}
-          className="w-[380px] sm:w-[460px] md:w-[520px] min-w-[340px] shrink-0 flex items-center justify-between gap-3 px-3 py-1.5 border-r border-gray-800 cursor-pointer min-w-0 bg-[#0e0f13]/80 group-hover:bg-[#121418] transition-colors h-full"
-          title={`${habit.name} - Click to edit`}
-        >
-          {/* Left: Icon, Name, Checkmark */}
-          <div className="flex items-center gap-3 min-w-0 flex-1 mr-2">
-            <div
-              className="w-8 h-8 min-w-[32px] min-h-[32px] max-w-[32px] max-h-[32px] rounded flex items-center justify-center text-base shrink-0 select-none"
-              style={{ backgroundColor: `${habit.color}20`, border: `1px solid ${habit.color}40` }}
-            >
-              {habit.icon}
-            </div>
-
-            <div className="flex items-center gap-2 min-w-0 flex-1">
-              <h3 className="text-xs sm:text-sm font-semibold text-white group-hover:text-blue-400 transition-colors truncate">
-                {habit.name}
-              </h3>
-
-              {isComplete && (
-                <div className="shrink-0 w-4 h-4 rounded-full bg-green-500/20 text-green-400 flex items-center justify-center border border-green-500/40" title="Goal Met">
-                  <Check size={10} strokeWidth={3} />
-                </div>
-              )}
-            </div>
-          </div>
-
-          {/* Right: Anchored Quota badge and Streak */}
-          <div className="flex items-center gap-2.5 shrink-0 ml-auto">
-            <span className={`border px-2.5 py-0.5 rounded text-[10px] sm:text-[11px] font-semibold whitespace-nowrap shrink-0 transition-colors ${getQuotaBadgeStyle()}`}>
-              {timeframeAmount}/{habit.quota}{unitLabel(habit.unit)} {habit.timeframe === 'daily' ? 'today' : habit.timeframe === 'weekly' ? 'this week' : 'this month'}
-            </span>
-
-            {stats.currentStreak > 0 ? (
-              <span className="text-xs font-bold text-orange-400 flex items-center gap-0.5 shrink-0 min-w-[36px] justify-end" title={`Current Streak: ${stats.currentStreak}${timeframeSuffix(habit.timeframe)}`}>
-                <Flame size={12} className="text-orange-500" />
-                {stats.currentStreak}{timeframeSuffix(habit.timeframe)}
-              </span>
-            ) : (
-              <div className="w-[36px] shrink-0" />
-            )}
-          </div>
-        </div>
-      )}
+          </>
+        )}
+      </div>
 
       {/* Right Heatmap / Interactive Input Cells */}
       <div className="flex-1 flex items-stretch min-w-0">
@@ -495,7 +469,7 @@ export function HabitCard({
                 if (amount === 0) {
                   if (!isFuture) {
                     cellBg = '#22c55e'; // Green for clean stop habit
-                    cellText = '✓';
+                    cellText = '0';
                     textColor = 'text-white font-bold';
                   }
                 } else if (amount > habit.quota) {
@@ -503,7 +477,8 @@ export function HabitCard({
                   cellText = `${amount}`;
                   textColor = 'text-white font-bold';
                 } else {
-                  cellBg = '#eab308'; // Warning/yellow for logged amount within quota
+                  // Within allowance
+                  cellBg = '#eab308'; // Warning/amber for logged amount within quota
                   cellText = `${amount}`;
                   textColor = 'text-black font-bold';
                 }

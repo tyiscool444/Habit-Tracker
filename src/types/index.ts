@@ -33,6 +33,8 @@ export interface Habit {
   unit: HabitUnit;
   quota: number; // For START: target to hit. For STOP: allowance limit.
   timeframe: Timeframe;
+  isRecurring?: boolean; // true by default; if false, this is a one-off goal
+  targetDate?: string; // ISO String (YYYY-MM-DD) for one-off habits
   startDate: string; // ISO String (YYYY-MM-DD)
   logs: Record<string, number>; // date string (YYYY-MM-DD) → amount logged
 }

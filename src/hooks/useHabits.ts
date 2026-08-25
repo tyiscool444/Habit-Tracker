@@ -39,6 +39,11 @@ export function useHabits() {
     setHabits((prev) => prev.filter(h => h.id !== id));
   };
 
+  const deleteHabits = (ids: string[]) => {
+    const idSet = new Set(ids);
+    setHabits((prev) => prev.filter(h => !idSet.has(h.id)));
+  };
+
   /**
    * Sets the logged amount for a given date.
    * If amount is 0 (or less), removes the log entry for that date.
@@ -58,5 +63,9 @@ export function useHabits() {
     }));
   };
 
-  return { habits, addHabit, updateHabit, deleteHabit, setLog, isLoaded };
+  const reorderHabits = (newOrder: Habit[]) => {
+    setHabits(newOrder);
+  };
+
+  return { habits, addHabit, updateHabit, deleteHabit, deleteHabits, setLog, reorderHabits, isLoaded };
 }

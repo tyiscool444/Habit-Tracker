@@ -1,23 +1,31 @@
 @import "tailwindcss";
 
 @theme {
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --font-sans: var(--font-geist-sans), -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --font-mono: var(--font-geist-mono), monospace;
 }
 
 :root {
-  --background: #09090b;
-  --foreground: #fafafa;
+  --background: #090a0d;
+  --foreground: #f8fafc;
+  --card-bg: #0e1015;
+  --panel-bg: #12141a;
+  --border-subtle: #1f2430;
+  --accent-primary: #3b82f6;
+  --accent-success: #22c55e;
+  --accent-warning: #f59e0b;
+  --accent-danger: #ef4444;
 }
 
 body {
   background-color: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-sans);
   -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
-/* Hide number input spinners */
+/* Hide number input spinners cleanly across browsers */
 input[type="number"]::-webkit-inner-spin-button,
 input[type="number"]::-webkit-outer-spin-button {
   -webkit-appearance: none;
@@ -42,28 +50,27 @@ input[type="number"] {
   scrollbar-width: none !important;
 }
 
+/* Utility Animations */
 @keyframes cell-fade-in {
   from {
     opacity: 0;
-    transform: scale(0.9) translateY(4px);
+    transform: scale(0.95) translateY(2px);
   }
   to {
     opacity: 1;
     transform: scale(1) translateY(0);
   }
 }
+
 .animate-cell-in {
-  animation: cell-fade-in 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards;
-  opacity: 0; 
+  animation: cell-fade-in 0.25s cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
 
-@keyframes svg-fade-in {
-  from { opacity: 0; transform: scale(0.98); }
-  to { opacity: 1; transform: scale(1); }
+/* Glassmorphism & Surface Utilities */
+.glass-panel {
+  background: rgba(14, 16, 21, 0.85);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.08);
 }
-.animate-svg-in {
-  animation: svg-fade-in 0.6s ease-out forwards;
-  animation-delay: 0.3s;
-  opacity: 0;
-  transform-origin: center;
-}
+

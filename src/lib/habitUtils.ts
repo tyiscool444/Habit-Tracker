@@ -18,6 +18,8 @@ import {
 } from 'date-fns';
 import { Habit, HabitStats, HabitUnit } from '../types';
 
+import { UNITS } from './constants';
+
 /**
  * Normalizes a date to a YYYY-MM-DD string in LOCAL time (not UTC).
  * Critical: using toISOString() would shift the date for +10:00 timezones.
@@ -31,31 +33,8 @@ export function normalizeDateStr(date: string | Date): string {
  * Returns the unit abbreviation for display.
  */
 export function unitLabel(unit: HabitUnit): string {
-  switch (unit) {
-    case 'amount':  return 'x';
-    case 'grams':   return 'g';
-    case 'kg':      return 'kg';
-    case 'mg':      return 'mg';
-    case 'mL':      return 'mL';
-    case 'liters':  return 'L';
-    case 'oz':      return 'oz';
-    case 'cups':    return 'cups';
-    case 'glasses': return 'gls';
-    case 'seconds': return 'sec';
-    case 'minutes': return 'min';
-    case 'hours':   return 'hr';
-    case 'km':      return 'km';
-    case 'miles':   return 'mi';
-    case 'meters':  return 'm';
-    case 'steps':   return 'steps';
-    case 'cal':     return 'cal';
-    case 'kcal':    return 'kcal';
-    case 'pages':   return 'pgs';
-    case 'sets':    return 'sets';
-    case 'reps':    return 'reps';
-    case 'percent': return '%';
-    default:        return 'x';
-  }
+  const match = UNITS.find(u => u.value === unit);
+  return match ? match.short : 'x';
 }
 
 /**
@@ -120,6 +99,19 @@ export function checkPeriodPerfect(habit: Habit, start: Date, end: Date): boolea
 export function calculateHabitStats(habit: Habit): HabitStats {
   const today = new Date();
   let startDate = parseISO(habit.startDate);
+
+  // If one-off habit
+  if (habit.isRecurring === false) {
+    const targetStr = habit.targetDate || habit.startDate;
+    const targetAmt = habit.logs[targetStr] || 0;
+    const isMet = habit.type === 'START' ? targetAmt >= habit.quota : targetAmt <= habit.quota;
+    return {
+      currentStreak: isMet ? 1 : 0,
+      perfectStreak: isMet ? 1 : 0,
+      failedPeriodsSinceStart: isMet ? 0 : 1,
+      totalPeriods: 1
+    };
+  }
 
   const logDates = Object.keys(habit.logs);
   if (logDates.length > 0) {
