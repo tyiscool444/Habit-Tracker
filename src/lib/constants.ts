@@ -18,6 +18,14 @@ export const COLORS = [
   '#3b82f6', '#6366f1', '#8b5cf6', '#a855f7', '#d946ef', '#ec4899', '#f43f5e', '#64748b', '#78716c'
 ];
 
+export const getRandomIcon = (): string => {
+  return ICONS[Math.floor(Math.random() * ICONS.length)];
+};
+
+export const getRandomColor = (): string => {
+  return COLORS[Math.floor(Math.random() * COLORS.length)];
+};
+
 export interface UnitOption {
   value: HabitUnit;
   label: string;

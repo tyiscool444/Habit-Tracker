@@ -1,8 +1,12 @@
 'use client';
 
 import { Habit } from '../types';
-import { unitLabel, timeframeSuffix, getAmountInInterval, normalizeDateStr } from '../lib/habitUtils';
-import { X, Flame, Target, Trophy, Calendar, CheckCircle2, TrendingUp, BarChart3, Clock } from 'lucide-react';
+import { unitLabel, timeframeSuffix, getAmountInInterval, normalizeDateStr, formatAmount } from '../lib/habitUtils';
+import { useHabitTimer } from '../context/TimerContext';
+import { 
+  X, Flame, Target, Trophy, Calendar, CheckCircle2, TrendingUp, BarChart3,
+  Clock, Play, Pause, RotateCcw, Plus, Square, Timer as TimerIcon
+} from 'lucide-react';
 import {
   format,
   parseISO,
@@ -14,7 +18,6 @@ import {
   startOfDay,
   addDays,
   subDays,
-  isBefore,
 } from 'date-fns';
 
 interface Props {
@@ -25,8 +28,27 @@ interface Props {
 
 export function HabitInsightsModal({ habit, onClose, onEdit }: Props) {
   const today = startOfDay(new Date());
+  const todayStr = normalizeDateStr(today);
   const startDate = parseISO(habit.startDate);
   const totalDaysTracked = Math.max(1, differenceInDays(today, startDate) + 1);
+
+  const {
+    activeHabitId,
+    isRunning,
+    elapsedSeconds,
+    startTimer,
+    pauseTimer,
+    resumeTimer,
+    stopTimer,
+    resetTimer,
+    addSeconds,
+    formatTime,
+  } = useHabitTimer();
+
+  const isThisHabitActive = activeHabitId === habit.id;
+  const isThisHabitRunning = isThisHabitActive && isRunning;
+  const currentSessionSec = isThisHabitActive ? elapsedSeconds : 0;
+  const todayAmount = habit.logs[todayStr] || 0;
 
   // Calculate lifetime total logged
   let totalAmountLogged = 0;
@@ -107,6 +129,11 @@ export function HabitInsightsModal({ habit, onClose, onEdit }: Props) {
                 >
                   {habit.type === 'START' ? 'Building' : 'Quitting'}
                 </span>
+                {habit.group && (
+                  <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-purple-500/15 text-purple-300 border border-purple-500/30">
+                    {habit.group}
+                  </span>
+                )}
               </div>
               <p className="text-xs text-gray-400">
                 Target: <span className="font-semibold text-gray-300">{habit.quota} {unitLabel(habit.unit)}</span> / {habit.timeframe}
@@ -121,6 +148,142 @@ export function HabitInsightsModal({ habit, onClose, onEdit }: Props) {
           >
             <X size={18} />
           </button>
+        </div>
+
+        {/* Live Timer Station */}
+        <div 
+          className="bg-[#12151f] border rounded-2xl p-4 sm:p-5 space-y-3.5 transition-all relative overflow-hidden"
+          style={{
+            borderColor: isThisHabitRunning ? `${habit.color}60` : '#1f2430',
+            boxShadow: isThisHabitRunning ? `0 0 25px -5px ${habit.color}25` : undefined,
+          }}
+        >
+          {/* Top Bar: Title & Target status */}
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <div 
+                className="w-7 h-7 rounded-lg flex items-center justify-center"
+                style={{ backgroundColor: `${habit.color}20`, color: habit.color }}
+              >
+                <TimerIcon size={15} />
+              </div>
+              <span className="text-xs font-bold text-white uppercase tracking-wider">
+                Timer & Focus Station
+              </span>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <span className="text-xs font-medium text-gray-400">
+                Today: <span className="font-bold text-white">{formatAmount(todayAmount)}</span> / {formatAmount(habit.quota)} {unitLabel(habit.unit)}
+              </span>
+              {isThisHabitRunning && (
+                <span className="flex items-center gap-1 text-[10px] font-bold text-emerald-400 bg-emerald-500/20 border border-emerald-500/30 px-2 py-0.5 rounded-full animate-pulse">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
+                  ACTIVE
+                </span>
+              )}
+            </div>
+          </div>
+
+          {/* Center: Digital Clock Display */}
+          <div className="flex flex-col items-center justify-center py-1 relative">
+            <div className="text-4xl sm:text-5xl font-mono font-black tracking-widest text-white drop-shadow">
+              {formatTime(currentSessionSec)}
+            </div>
+            <p className="text-[11px] font-medium text-gray-400 mt-1">
+              {isThisHabitRunning ? 'Timer running • Auto-logging in real-time' : isThisHabitActive ? 'Timer paused' : 'Ready to start focus session'}
+            </p>
+          </div>
+
+          {/* Today's Quota Progress Bar */}
+          <div className="space-y-1">
+            <div className="w-full h-2 rounded-full bg-gray-900 overflow-hidden border border-gray-800">
+              <div 
+                className="h-full rounded-full transition-all duration-300"
+                style={{
+                  width: `${Math.min(100, Math.round((todayAmount / habit.quota) * 100))}%`,
+                  backgroundColor: habit.color,
+                }}
+              />
+            </div>
+          </div>
+
+          {/* Main Controls & Presets */}
+          <div className="flex items-center justify-between gap-2 pt-1 flex-wrap">
+            {/* Primary Start / Pause / Resume Button */}
+            {!isThisHabitRunning ? (
+              <button
+                type="button"
+                onClick={() => isThisHabitActive ? resumeTimer() : startTimer(habit)}
+                className="flex-1 min-w-[140px] py-2.5 px-4 rounded-xl font-bold text-xs text-white flex items-center justify-center gap-2 transition-all shadow-lg active:scale-98"
+                style={{
+                  backgroundColor: habit.color,
+                  boxShadow: `0 4px 14px 0 ${habit.color}40`,
+                }}
+              >
+                <Play size={15} fill="currentColor" />
+                <span>{isThisHabitActive ? 'Resume Timer' : 'Start Timer'}</span>
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={pauseTimer}
+                className="flex-1 min-w-[140px] py-2.5 px-4 rounded-xl font-bold text-xs bg-amber-500 hover:bg-amber-600 text-black flex items-center justify-center gap-2 transition-all shadow-lg active:scale-98"
+              >
+                <Pause size={15} fill="currentColor" />
+                <span>Pause Timer</span>
+              </button>
+            )}
+
+            {/* Quick Add Presets */}
+            <div className="flex items-center gap-1">
+              <button
+                type="button"
+                onClick={() => {
+                  if (!isThisHabitActive) startTimer(habit);
+                  addSeconds(300); // +5m
+                }}
+                className="px-2.5 py-2 rounded-lg bg-gray-900 hover:bg-gray-800 text-gray-300 hover:text-white border border-gray-800 text-xs font-bold transition"
+                title="Add 5 Minutes"
+              >
+                +5m
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  if (!isThisHabitActive) startTimer(habit);
+                  addSeconds(900); // +15m
+                }}
+                className="px-2.5 py-2 rounded-lg bg-gray-900 hover:bg-gray-800 text-gray-300 hover:text-white border border-gray-800 text-xs font-bold transition"
+                title="Add 15 Minutes"
+              >
+                +15m
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  if (!isThisHabitActive) startTimer(habit);
+                  addSeconds(1500); // +25m Pomodoro
+                }}
+                className="px-2.5 py-2 rounded-lg bg-purple-600/20 hover:bg-purple-600/30 text-purple-300 hover:text-white border border-purple-500/40 text-xs font-bold transition"
+                title="Add 25m Pomodoro Session"
+              >
+                +25m
+              </button>
+            </div>
+
+            {/* Reset / Stop Button */}
+            {isThisHabitActive && (
+              <button
+                type="button"
+                onClick={stopTimer}
+                className="p-2 rounded-lg bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/30 transition"
+                title="Stop and finish timer"
+              >
+                <Square size={14} fill="currentColor" />
+              </button>
+            )}
+          </div>
         </div>
 
         {/* Core Metric Cards (4 Grid) */}
@@ -155,7 +318,7 @@ export function HabitInsightsModal({ habit, onClose, onEdit }: Props) {
               Total Logged
             </span>
             <span className="text-xl font-black text-blue-400 mt-1">
-              {totalAmountLogged}
+              {formatAmount(totalAmountLogged)}
               <span className="text-xs font-semibold text-gray-500 ml-0.5">{unitLabel(habit.unit)}</span>
             </span>
             <span className="text-[10px] text-gray-500">{loggedDaysCount} active days</span>
@@ -194,7 +357,7 @@ export function HabitInsightsModal({ habit, onClose, onEdit }: Props) {
                   backgroundColor: item.amount > 0 ? (item.isMet ? habit.color : `${habit.color}40`) : '#1c1f26',
                   opacity: item.amount > 0 ? 1 : 0.4,
                 }}
-                title={`${format(item.date, 'EEE, MMM d')}: ${item.amount} ${unitLabel(habit.unit)}`}
+                title={`${format(item.date, 'EEE, MMM d')}: ${formatAmount(item.amount)} ${unitLabel(habit.unit)}`}
               />
             ))}
           </div>
@@ -205,12 +368,12 @@ export function HabitInsightsModal({ habit, onClose, onEdit }: Props) {
           <div className="flex items-center gap-2">
             <Clock size={13} className="text-gray-400" />
             <span className="text-gray-400">This Week:</span>
-            <span className="font-bold text-white">{thisWeekAmount} {unitLabel(habit.unit)}</span>
+            <span className="font-bold text-white">{formatAmount(thisWeekAmount)} {unitLabel(habit.unit)}</span>
           </div>
           <div className="text-gray-700">|</div>
           <div className="flex items-center gap-2">
             <span className="text-gray-400">This Month:</span>
-            <span className="font-bold text-white">{thisMonthAmount} {unitLabel(habit.unit)}</span>
+            <span className="font-bold text-white">{formatAmount(thisMonthAmount)} {unitLabel(habit.unit)}</span>
           </div>
         </div>
 

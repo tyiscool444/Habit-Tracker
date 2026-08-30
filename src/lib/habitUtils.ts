@@ -30,6 +30,27 @@ export function normalizeDateStr(date: string | Date): string {
 }
 
 /**
+ * Rounds down a number to the specified number of decimal places (default 2),
+ * preventing floating-point inaccuracies like 1.0499999999999998.
+ */
+export function roundDown(num: number, decimals = 2): number {
+  if (!num || isNaN(num)) return 0;
+  const factor = Math.pow(10, decimals);
+  return Math.floor((num + 1e-9) * factor) / factor;
+}
+
+/**
+ * Formats a number rounded down to max 2 decimal places.
+ * - Integer (3) -> "3"
+ * - Decimal (1.0499...) -> "1.04"
+ */
+export function formatAmount(amount: number): string {
+  if (amount === undefined || amount === null || isNaN(amount)) return '0';
+  const val = roundDown(amount, 2);
+  return val.toString();
+}
+
+/**
  * Returns the unit abbreviation for display.
  */
 export function unitLabel(unit: HabitUnit): string {
@@ -64,19 +85,6 @@ export function getAmountInInterval(logs: Record<string, number>, start: Date, e
   return total;
 }
 
-/**
- * Checks if a habit period counts as a "streak" (any activity).
- * START: logged anything > 0.
- * STOP: logged within allowance (including 0).
- */
-export function checkPeriodStreak(habit: Habit, start: Date, end: Date): boolean {
-  const amount = getAmountInInterval(habit.logs, start, end);
-  if (habit.type === 'START') {
-    return amount > 0;
-  } else {
-    return amount <= habit.quota;
-  }
-}
 
 /**
  * Checks if a habit period counts as a "perfect" period (fully met quota).
@@ -105,12 +113,7 @@ export function calculateHabitStats(habit: Habit): HabitStats {
     const targetStr = habit.targetDate || habit.startDate;
     const targetAmt = habit.logs[targetStr] || 0;
     const isMet = habit.type === 'START' ? targetAmt >= habit.quota : targetAmt <= habit.quota;
-    return {
-      currentStreak: isMet ? 1 : 0,
-      perfectStreak: isMet ? 1 : 0,
-      failedPeriodsSinceStart: isMet ? 0 : 1,
-      totalPeriods: 1
-    };
+    return { currentStreak: isMet ? 1 : 0 };
   }
 
   const logDates = Object.keys(habit.logs);
@@ -125,49 +128,42 @@ export function calculateHabitStats(habit: Habit): HabitStats {
   }
 
   if (isBefore(today, startDate)) {
-    return { currentStreak: 0, perfectStreak: 0, failedPeriodsSinceStart: 0, totalPeriods: 0 };
+    return { currentStreak: 0 };
   }
 
-  let totalPeriods = 0;
-  let failedPeriods = 0;
   let currentStreak = 0;
-  let streakActive = true;
 
-  const iterate = (getPeriod: (i: number) => { start: Date; end: Date }, count: number) => {
-    for (let i = 0; i < count; i++) {
+  const countStreak = (getPeriod: (i: number) => { start: Date; end: Date }, maxCount: number) => {
+    for (let i = 0; i < maxCount; i++) {
       const { start, end } = getPeriod(i);
-      const isPerfect = checkPeriodPerfect(habit, start, end);
-
-      if (isPerfect) {
-        if (streakActive) {
-          currentStreak++;
-        }
+      if (checkPeriodPerfect(habit, start, end)) {
+        currentStreak++;
       } else {
-        streakActive = false;
-        failedPeriods++;
+        break; // Streak broken, stop immediately
       }
     }
   };
 
   if (habit.timeframe === 'daily') {
-    totalPeriods = differenceInDays(today, startDate) + 1;
-    iterate(i => ({
+    const totalDays = differenceInDays(today, startDate) + 1;
+    countStreak(i => ({
       start: startOfDay(addDays(today, -i)),
       end: endOfDay(addDays(today, -i)),
-    }), totalPeriods);
+    }), totalDays);
   } else if (habit.timeframe === 'weekly') {
-    totalPeriods = differenceInWeeks(today, startDate) + 1;
-    iterate(i => ({
+    const totalWeeks = differenceInWeeks(today, startDate) + 1;
+    countStreak(i => ({
       start: startOfWeek(addWeeks(today, -i), { weekStartsOn: 1 }),
       end: endOfWeek(addWeeks(today, -i), { weekStartsOn: 1 }),
-    }), totalPeriods);
+    }), totalWeeks);
   } else {
-    totalPeriods = differenceInMonths(today, startDate) + 1;
-    iterate(i => ({
+    const totalMonths = differenceInMonths(today, startDate) + 1;
+    countStreak(i => ({
       start: startOfMonth(addMonths(today, -i)),
       end: endOfMonth(addMonths(today, -i)),
-    }), totalPeriods);
+    }), totalMonths);
   }
 
-  return { currentStreak, perfectStreak: currentStreak, failedPeriodsSinceStart: failedPeriods, totalPeriods };
+  return { currentStreak };
 }
+

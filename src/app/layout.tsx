@@ -15,6 +15,12 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "HabitThat — Modern Habit & Task Tracker",
   description: "Track your habits, build streaks, and achieve daily & long-term goals with an Excel-style interactive grid.",
+  manifest: "/manifest.json",
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: "black-translucent",
+    title: "HabitThat",
+  },
 };
 
 export default function RootLayout({

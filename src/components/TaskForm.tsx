@@ -1,29 +1,30 @@
 'use client';
 
 import { useState, useMemo } from 'react';
-import { Habit, HabitType, Timeframe, HabitUnit } from '../types';
-import { X, Trash2, Tag, Shuffle } from 'lucide-react';
+import { Habit, HabitType, HabitUnit } from '../types';
+import { X, Trash2, Calendar, Tag, Shuffle } from 'lucide-react';
 import { ICONS, COLORS, UNITS, getRandomIcon, getRandomColor } from '../lib/constants';
+import { format, addDays, endOfMonth } from 'date-fns';
 
 interface Props {
-  initialHabit?: Habit;
+  initialTask?: Habit;
   existingGroups?: string[];
-  onSave: (habit: Habit) => void;
+  onSave: (task: Habit) => void;
   onCancel: () => void;
   onDelete?: () => void;
 }
 
-export function HabitForm({ initialHabit, existingGroups = [], onSave, onCancel, onDelete }: Props) {
-  const [name, setName] = useState(initialHabit?.name || '');
-  const [icon, setIcon] = useState(() => initialHabit?.icon || getRandomIcon());
-  const [color, setColor] = useState(() => initialHabit?.color || getRandomColor());
-  const [group, setGroup] = useState(initialHabit?.group || '');
-  const [type, setType] = useState<HabitType>(initialHabit?.type || 'START');
-  const [unit, setUnit] = useState<HabitUnit>(initialHabit?.unit || 'amount');
-  const [quota, setQuota] = useState(initialHabit?.quota || 1);
-  const [timeframe, setTimeframe] = useState<Timeframe>(initialHabit?.timeframe || 'daily');
-  const [startDate] = useState(initialHabit?.startDate || new Date().toISOString().split('T')[0]);
-  
+export function TaskForm({ initialTask, existingGroups = [], onSave, onCancel, onDelete }: Props) {
+  const todayStr = new Date().toISOString().split('T')[0];
+  const [name, setName] = useState(initialTask?.name || '');
+  const [icon, setIcon] = useState(() => initialTask?.icon || getRandomIcon());
+  const [color, setColor] = useState(() => initialTask?.color || getRandomColor());
+  const [group, setGroup] = useState(initialTask?.group || '');
+  const [type, setType] = useState<HabitType>(initialTask?.type || 'START');
+  const [unit, setUnit] = useState<HabitUnit>(initialTask?.unit || 'amount');
+  const [quota, setQuota] = useState(initialTask?.quota || 1);
+  const [targetDate, setTargetDate] = useState<string>(initialTask?.targetDate || initialTask?.startDate || todayStr);
+
   // Popover Drawer states
   const [activePicker, setActivePicker] = useState<'icon' | 'color' | null>(null);
 
@@ -35,8 +36,8 @@ export function HabitForm({ initialHabit, existingGroups = [], onSave, onCancel,
     e.preventDefault();
     if (!name.trim()) return;
 
-    const habitToSave: Habit = {
-      id: initialHabit?.id || Math.random().toString(36).substr(2, 9),
+    const taskToSave: Habit = {
+      id: initialTask?.id || Math.random().toString(36).substr(2, 9),
       name: name.trim(),
       icon,
       color,
@@ -44,15 +45,25 @@ export function HabitForm({ initialHabit, existingGroups = [], onSave, onCancel,
       type,
       unit,
       quota: quota || 1,
-      timeframe,
-      isRecurring: true,
-      startDate,
-      logs: initialHabit?.logs || {},
+      timeframe: 'daily',
+      isRecurring: false,
+      targetDate: targetDate || todayStr,
+      startDate: targetDate || todayStr,
+      logs: initialTask?.logs || {},
     };
-    onSave(habitToSave);
+    onSave(taskToSave);
   };
 
   const isStop = type === 'STOP';
+
+  const setDatePreset = (preset: 'today' | 'tomorrow' | '3days' | 'nextWeek' | 'endOfMonth') => {
+    const now = new Date();
+    if (preset === 'today') setTargetDate(format(now, 'yyyy-MM-dd'));
+    else if (preset === 'tomorrow') setTargetDate(format(addDays(now, 1), 'yyyy-MM-dd'));
+    else if (preset === '3days') setTargetDate(format(addDays(now, 3), 'yyyy-MM-dd'));
+    else if (preset === 'nextWeek') setTargetDate(format(addDays(now, 7), 'yyyy-MM-dd'));
+    else if (preset === 'endOfMonth') setTargetDate(format(endOfMonth(now), 'yyyy-MM-dd'));
+  };
 
   return (
     <div className="bg-[#111318] border border-gray-800 rounded-2xl w-full max-w-md mx-auto shadow-2xl overflow-hidden text-white font-sans animate-in fade-in zoom-in-95 duration-150">
@@ -66,7 +77,7 @@ export function HabitForm({ initialHabit, existingGroups = [], onSave, onCancel,
             {icon}
           </div>
           <h2 className="text-base font-bold text-gray-100 tracking-tight">
-            {initialHabit ? 'Edit Recurring Habit' : 'New Recurring Habit'}
+            {initialTask ? 'Edit One-Off Task' : 'New One-Off Task'}
           </h2>
         </div>
         <button
@@ -79,11 +90,11 @@ export function HabitForm({ initialHabit, existingGroups = [], onSave, onCancel,
       </div>
 
       <form onSubmit={handleSubmit} className="p-5 space-y-4">
-        {/* Habit Name with Embedded Icon & Color Quick-Selectors */}
+        {/* Task Name with Embedded Icon & Color Quick-Selectors */}
         <div>
           <div className="flex items-center justify-between mb-1.5">
             <label className="block text-[11px] font-bold uppercase tracking-wider text-gray-400">
-              Habit Details
+              Task Details
             </label>
             <button
               type="button"
@@ -91,14 +102,14 @@ export function HabitForm({ initialHabit, existingGroups = [], onSave, onCancel,
                 setIcon(getRandomIcon());
                 setColor(getRandomColor());
               }}
-              className="text-[11px] font-medium text-gray-400 hover:text-blue-400 flex items-center gap-1 transition-colors px-1.5 py-0.5 rounded-md hover:bg-gray-800/80 active:scale-95"
+              className="text-[11px] font-medium text-gray-400 hover:text-purple-400 flex items-center gap-1 transition-colors px-1.5 py-0.5 rounded-md hover:bg-gray-800/80 active:scale-95"
               title="Randomize emoji and color"
             >
               <Shuffle size={11} />
               <span>Randomize</span>
             </button>
           </div>
-          <div className="flex items-center gap-2 bg-[#171922] border border-gray-700/80 rounded-xl p-1.5 focus-within:border-blue-500 transition-colors shadow-inner">
+          <div className="flex items-center gap-2 bg-[#171922] border border-gray-700/80 rounded-xl p-1.5 focus-within:border-purple-500 transition-colors shadow-inner">
             {/* Quick Icon Button */}
             <button
               type="button"
@@ -130,7 +141,7 @@ export function HabitForm({ initialHabit, existingGroups = [], onSave, onCancel,
               className="flex-1 bg-transparent px-2 text-sm text-white placeholder-gray-500 focus:outline-none font-medium"
               value={name}
               onChange={e => setName(e.target.value)}
-              placeholder="e.g. Read books, Gym, Hydrate..."
+              placeholder="e.g. Finish tax return, Buy birthday gift..."
             />
           </div>
         </div>
@@ -144,7 +155,7 @@ export function HabitForm({ initialHabit, existingGroups = [], onSave, onCancel,
                 <button
                   type="button"
                   onClick={() => setIcon(getRandomIcon())}
-                  className="text-[10px] text-blue-400 hover:text-blue-300 flex items-center gap-1 px-1.5 py-0.5 rounded hover:bg-gray-800 transition"
+                  className="text-[10px] text-purple-400 hover:text-purple-300 flex items-center gap-1 px-1.5 py-0.5 rounded hover:bg-gray-800 transition"
                 >
                   <Shuffle size={10} /> Random
                 </button>
@@ -168,7 +179,7 @@ export function HabitForm({ initialHabit, existingGroups = [], onSave, onCancel,
                   }}
                   className={`w-8 h-8 rounded-lg text-base flex items-center justify-center transition-all ${
                     icon === ic 
-                      ? 'bg-blue-600 border border-blue-400 scale-105 shadow-md' 
+                      ? 'bg-purple-600 border border-purple-400 scale-105 shadow-md' 
                       : 'hover:bg-gray-700 bg-gray-800/60'
                   }`}
                 >
@@ -187,7 +198,7 @@ export function HabitForm({ initialHabit, existingGroups = [], onSave, onCancel,
                 <button
                   type="button"
                   onClick={() => setColor(getRandomColor())}
-                  className="text-[10px] text-blue-400 hover:text-blue-300 flex items-center gap-1 px-1.5 py-0.5 rounded hover:bg-gray-800 transition"
+                  className="text-[10px] text-purple-400 hover:text-purple-300 flex items-center gap-1 px-1.5 py-0.5 rounded hover:bg-gray-800 transition"
                 >
                   <Shuffle size={10} /> Random
                 </button>
@@ -210,7 +221,7 @@ export function HabitForm({ initialHabit, existingGroups = [], onSave, onCancel,
                     setActivePicker(null);
                   }}
                   className={`w-6 h-6 rounded-full border-2 transition-all hover:scale-110 ${
-                    color === c ? 'border-white scale-110 shadow-lg ring-2 ring-blue-500/50' : 'border-transparent'
+                    color === c ? 'border-white scale-110 shadow-lg ring-2 ring-purple-500/50' : 'border-transparent'
                   }`}
                   style={{ backgroundColor: c }}
                 />
@@ -236,14 +247,14 @@ export function HabitForm({ initialHabit, existingGroups = [], onSave, onCancel,
             )}
           </div>
 
-          <div className="flex items-center gap-2 bg-[#171922] border border-gray-700/80 rounded-xl px-3 py-1.5 focus-within:border-blue-500 transition-colors shadow-inner">
+          <div className="flex items-center gap-2 bg-[#171922] border border-gray-700/80 rounded-xl px-3 py-1.5 focus-within:border-purple-500 transition-colors shadow-inner">
             <Tag size={13} className="text-gray-400 shrink-0" />
             <input
               type="text"
               className="flex-1 bg-transparent text-xs text-white placeholder-gray-500 focus:outline-none font-medium"
               value={group}
               onChange={e => setGroup(e.target.value)}
-              placeholder="e.g. Morning Routine, Health & Fitness..."
+              placeholder="e.g. Work Projects, Home, Personal..."
             />
           </div>
 
@@ -274,17 +285,54 @@ export function HabitForm({ initialHabit, existingGroups = [], onSave, onCancel,
             </div>
           ) : (
             <p className="text-[11px] text-gray-500 mt-1.5 italic">
-              No groups created yet. Type above to create one (e.g. Morning, Health, Work).
+              No groups created yet. Type above to assign a group.
             </p>
           )}
         </div>
 
-        {/* Goal Type & Timeframe Grid */}
+        {/* Due Date Picker & Quick Presets */}
+        <div>
+          <label className="block text-[11px] font-bold uppercase tracking-wider text-gray-400 mb-1.5">
+            Target Due Date
+          </label>
+          <div className="flex items-center gap-2 bg-[#171922] border border-gray-700/80 rounded-xl px-3 py-1.5 shadow-inner focus-within:border-purple-500">
+            <Calendar size={14} className="text-purple-400 shrink-0" />
+            <input
+              type="date"
+              required
+              className="w-full bg-transparent text-xs font-semibold text-white focus:outline-none cursor-pointer"
+              value={targetDate}
+              onChange={e => setTargetDate(e.target.value)}
+            />
+          </div>
+
+          {/* Quick Date Presets */}
+          <div className="flex gap-1.5 flex-wrap mt-2">
+            {[
+              { id: 'today', label: 'Today' },
+              { id: 'tomorrow', label: 'Tomorrow' },
+              { id: '3days', label: 'In 3 Days' },
+              { id: 'nextWeek', label: 'In 1 Week' },
+              { id: 'endOfMonth', label: 'End of Month' }
+            ].map(p => (
+              <button
+                key={p.id}
+                type="button"
+                onClick={() => setDatePreset(p.id as any)}
+                className="px-2 py-0.5 rounded-lg text-[10px] font-semibold bg-gray-800/60 hover:bg-gray-700 text-gray-400 hover:text-white border border-gray-700/40 transition"
+              >
+                {p.label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Task Type & Target Goal Row */}
         <div className="grid grid-cols-2 gap-3">
           {/* Build vs Quit Segmented Control */}
           <div>
             <label className="block text-[11px] font-bold uppercase tracking-wider text-gray-400 mb-1.5">
-              Goal Type
+              Task Nature
             </label>
             <div className="flex bg-[#171922] p-1 rounded-xl border border-gray-800">
               <button
@@ -292,11 +340,11 @@ export function HabitForm({ initialHabit, existingGroups = [], onSave, onCancel,
                 onClick={() => setType('START')}
                 className={`flex-1 py-1.5 text-xs font-semibold rounded-lg transition-all ${
                   type === 'START'
-                    ? 'bg-blue-600 text-white shadow-sm'
+                    ? 'bg-purple-600 text-white shadow-sm'
                     : 'text-gray-400 hover:text-white'
                 }`}
               >
-                Build
+                Task
               </button>
               <button
                 type="button"
@@ -307,74 +355,48 @@ export function HabitForm({ initialHabit, existingGroups = [], onSave, onCancel,
                     : 'text-gray-400 hover:text-white'
                 }`}
               >
-                Quit
+                Restraint
               </button>
             </div>
           </div>
 
-          {/* Timeframe Selector */}
+          {/* Goal & Unit */}
           <div>
             <label className="block text-[11px] font-bold uppercase tracking-wider text-gray-400 mb-1.5">
-              Frequency
+              Target Target & Unit
             </label>
-            <div className="grid grid-cols-3 gap-1 bg-[#171922] p-1 rounded-xl border border-gray-800">
-              {(['daily', 'weekly', 'monthly'] as const).map(tf => (
-                <button
-                  key={tf}
-                  type="button"
-                  onClick={() => setTimeframe(tf)}
-                  className={`py-1.5 text-[11px] font-semibold rounded-lg capitalize transition-all ${
-                    timeframe === tf
-                      ? 'bg-gray-800 text-blue-400 border border-blue-500/40 shadow-sm'
-                      : 'text-gray-400 hover:text-white'
-                  }`}
+            <div className="grid grid-cols-5 gap-1.5">
+              <div className="col-span-2 bg-[#171922] border border-gray-700/80 rounded-xl px-2 py-1.5 flex items-center shadow-inner focus-within:border-purple-500">
+                <input
+                  type="number"
+                  min="1"
+                  step="any"
+                  required
+                  className="w-full bg-transparent text-xs font-bold text-white focus:outline-none"
+                  value={quota}
+                  onChange={e => setQuota(parseFloat(e.target.value) || 1)}
+                />
+              </div>
+              <div className="col-span-3 bg-[#171922] border border-gray-700/80 rounded-xl px-2 py-1.5 flex items-center shadow-inner focus-within:border-purple-500">
+                <select
+                  className="w-full bg-transparent text-xs font-semibold text-gray-200 focus:outline-none cursor-pointer"
+                  value={unit}
+                  onChange={e => setUnit(e.target.value as HabitUnit)}
                 >
-                  {tf === 'daily' ? 'Day' : tf === 'weekly' ? 'Wk' : 'Mo'}
-                </button>
-              ))}
-            </div>
-          </div>
-        </div>
-
-        {/* Goal / Allowance & Unit in a Compact Single Row */}
-        <div>
-          <label className="block text-[11px] font-bold uppercase tracking-wider text-gray-400 mb-1.5">
-            {isStop ? 'Allowance Limit' : 'Target Goal'} & Unit
-          </label>
-          <div className="grid grid-cols-5 gap-2">
-            {/* Numeric Quota Input (2 cols) */}
-            <div className="col-span-2 bg-[#171922] border border-gray-700/80 rounded-xl px-3 py-1.5 flex items-center shadow-inner focus-within:border-blue-500">
-              <input
-                type="number"
-                min={isStop ? '0' : '1'}
-                step="any"
-                required
-                className="w-full bg-transparent text-sm font-bold text-white focus:outline-none"
-                value={quota}
-                onChange={e => setQuota(parseFloat(e.target.value) || 0)}
-              />
-            </div>
-
-            {/* Unit Dropdown Selector (3 cols) */}
-            <div className="col-span-3 bg-[#171922] border border-gray-700/80 rounded-xl px-3 py-1.5 flex items-center shadow-inner focus-within:border-blue-500">
-              <select
-                className="w-full bg-transparent text-xs font-semibold text-gray-200 focus:outline-none cursor-pointer"
-                value={unit}
-                onChange={e => setUnit(e.target.value as HabitUnit)}
-              >
-                {UNITS.map(u => (
-                  <option key={u.value} value={u.value} className="bg-gray-900 text-white">
-                    {u.label} ({u.short})
-                  </option>
-                ))}
-              </select>
+                  {UNITS.map(u => (
+                    <option key={u.value} value={u.value} className="bg-gray-900 text-white">
+                      {u.short}
+                    </option>
+                  ))}
+                </select>
+              </div>
             </div>
           </div>
         </div>
 
         {/* Bottom Actions Bar */}
         <div className="flex items-center justify-between pt-3 border-t border-gray-800/80 mt-2">
-          {initialHabit && onDelete ? (
+          {initialTask && onDelete ? (
             <button
               type="button"
               onClick={onDelete}
@@ -395,9 +417,9 @@ export function HabitForm({ initialHabit, existingGroups = [], onSave, onCancel,
             </button>
             <button
               type="submit"
-              className="px-5 py-2 rounded-xl text-xs font-bold bg-blue-600 hover:bg-blue-500 text-white shadow-lg shadow-blue-600/30 transition-all active:scale-95"
+              className="px-5 py-2 rounded-xl text-xs font-bold bg-purple-600 hover:bg-purple-500 text-white shadow-lg shadow-purple-600/30 transition-all active:scale-95"
             >
-              {initialHabit ? 'Save Changes' : 'Create Habit'}
+              {initialTask ? 'Save Task' : 'Create Task'}
             </button>
           </div>
         </div>

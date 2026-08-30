@@ -1,24 +1,20 @@
 'use client';
 
-import { Habit } from '../types';
-import { calculateHabitStats, unitLabel, normalizeDateStr, getAmountInInterval, timeframeSuffix } from '../lib/habitUtils';
 import { useMemo, useState } from 'react';
-import { Plus, Minus, Flame, Check, ChevronUp, ChevronDown, BarChart2 } from 'lucide-react';
-import { startOfWeek, endOfWeek, addDays, startOfMonth, endOfMonth, isBefore, isSameDay, startOfDay, format } from 'date-fns';
+import { Habit } from '../types';
+import { calculateHabitStats, unitLabel, normalizeDateStr, getAmountInInterval, timeframeSuffix, formatAmount } from '../lib/habitUtils';
+import { useHabitTimer } from '../context/TimerContext';
+import { Plus, Minus, Flame, Check, Play, Pause } from 'lucide-react';
+import { startOfWeek, endOfWeek, addDays, startOfMonth, endOfMonth, isBefore, startOfDay, format } from 'date-fns';
 
 interface Props {
   habit: Habit;
-  selectedDate: Date;
   selectedDateStr: string;
   weekDays: Date[];
   viewMode?: 'day' | 'week' | 'month' | 'year';
   showNumbers?: boolean;
-  groupingEnabled?: boolean;
+  cellGroupingEnabled?: boolean;
   showBorders?: boolean;
-  canMoveUp?: boolean;
-  canMoveDown?: boolean;
-  onMoveUp?: () => void;
-  onMoveDown?: () => void;
   onLog: (date: string, amount: number) => void;
   onEdit?: () => void;
   onOpenInsights?: () => void;
@@ -34,25 +30,35 @@ interface TimeframeChunk {
 
 export function HabitCard({
   habit,
-  selectedDate,
   selectedDateStr,
   weekDays,
   viewMode = 'week',
   showNumbers = true,
-  groupingEnabled = true,
+  cellGroupingEnabled = true,
   showBorders = false,
-  canMoveUp = false,
-  canMoveDown = false,
-  onMoveUp,
-  onMoveDown,
   onLog,
   onEdit,
   onOpenInsights,
   onSelectDate
 }: Props) {
+  const isCellGrouping = cellGroupingEnabled;
   const stats = useMemo(() => calculateHabitStats(habit), [habit]);
   const activeDateStr = selectedDateStr || normalizeDateStr(new Date());
   const activeAmount = habit.logs[activeDateStr] || 0;
+
+  const {
+    activeHabitId,
+    isRunning: isTimerRunning,
+    elapsedSeconds,
+    startTimer,
+    pauseTimer,
+    resumeTimer,
+    formatTime,
+  } = useHabitTimer();
+
+  const isHabitActiveHere = activeHabitId === habit.id;
+  const isHabitRunningHere = isHabitActiveHere && isTimerRunning;
+  const isTimeBased = ['seconds', 'minutes', 'hours'].includes(habit.unit);
 
   // State for inline cell editing on all timeframes (Day, Week, Month, Year)
   const [editingDayStr, setEditingDayStr] = useState<string | null>(null);
@@ -93,7 +99,7 @@ export function HabitCard({
     if (weekDays.length === 0) return [];
 
     if (viewMode === 'day') {
-      const day = weekDays[0] || selectedDate;
+      const day = weekDays[0];
       const dayStr = normalizeDateStr(day);
       const amt = habit.logs[dayStr] || 0;
       const isComp = habit.type === 'START' ? amt >= habit.quota : amt <= habit.quota;
@@ -150,7 +156,7 @@ export function HabitCard({
       const isComp = habit.type === 'START' ? amt >= habit.quota : (amt <= habit.quota && !isBefore(todayStart, day));
       return { days: [day], isComplete: isComp, amount: amt };
     });
-  }, [weekDays, habit, viewMode, selectedDate, todayStart]);
+  }, [weekDays, habit, viewMode, todayStart]);
 
   const handleCellClick = (day: Date, dayStr: string, currentAmount: number) => {
     if (isBefore(todayStart, startOfDay(day))) return;
@@ -216,29 +222,7 @@ export function HabitCard({
         className={`${leftColWidthClass} shrink-0 flex items-center justify-between px-2.5 sm:px-3 border-r border-gray-800 bg-[#0e0f13]/80 group-hover:bg-[#121418] transition-colors h-full`}
       >
         {isCompactLeft ? (
-          <div className="flex items-center justify-between w-full">
-            {/* Move arrows in compact view */}
-            <div className="flex flex-col opacity-0 group-hover:opacity-100 transition-opacity">
-              <button
-                type="button"
-                onClick={(e) => { e.stopPropagation(); onMoveUp?.(); }}
-                disabled={!canMoveUp}
-                className="text-gray-500 hover:text-white disabled:opacity-20 disabled:hover:text-gray-500"
-                title="Move up"
-              >
-                <ChevronUp size={10} />
-              </button>
-              <button
-                type="button"
-                onClick={(e) => { e.stopPropagation(); onMoveDown?.(); }}
-                disabled={!canMoveDown}
-                className="text-gray-500 hover:text-white disabled:opacity-20 disabled:hover:text-gray-500"
-                title="Move down"
-              >
-                <ChevronDown size={10} />
-              </button>
-            </div>
-
+          <div className="flex items-center justify-center w-full">
             <div
               onClick={onOpenInsights || onEdit}
               className="w-8 h-8 min-w-[32px] min-h-[32px] rounded flex items-center justify-center text-base shrink-0 select-none shadow-inner cursor-pointer hover:scale-105 transition"
@@ -251,28 +235,6 @@ export function HabitCard({
         ) : (
           <>
             <div className="flex items-center gap-2 min-w-0 flex-1 mr-2">
-              {/* Up / Down Reorder Handles */}
-              <div className="flex flex-col -space-y-0.5 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
-                <button
-                  type="button"
-                  onClick={(e) => { e.stopPropagation(); onMoveUp?.(); }}
-                  disabled={!canMoveUp}
-                  className="p-0.5 text-gray-500 hover:text-white disabled:opacity-20 disabled:hover:text-gray-500 transition"
-                  title="Move habit up"
-                >
-                  <ChevronUp size={11} />
-                </button>
-                <button
-                  type="button"
-                  onClick={(e) => { e.stopPropagation(); onMoveDown?.(); }}
-                  disabled={!canMoveDown}
-                  className="p-0.5 text-gray-500 hover:text-white disabled:opacity-20 disabled:hover:text-gray-500 transition"
-                  title="Move habit down"
-                >
-                  <ChevronDown size={11} />
-                </button>
-              </div>
-
               {/* Icon (Click to open Insights) */}
               <div
                 onClick={onOpenInsights || onEdit}
@@ -295,6 +257,39 @@ export function HabitCard({
                   <div className="shrink-0 w-3.5 h-3.5 rounded-full bg-green-500/20 text-green-400 flex items-center justify-center border border-green-500/40" title="Goal Met">
                     <Check size={9} strokeWidth={3} />
                   </div>
+                )}
+                {/* Active Timer Pulse Badge */}
+                {isHabitActiveHere && (
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      if (isHabitRunningHere) pauseTimer();
+                      else resumeTimer();
+                    }}
+                    className={`flex items-center gap-1 text-[10px] font-mono font-bold px-1.5 py-0.5 rounded-full border transition shrink-0 shadow-sm ${
+                      isHabitRunningHere 
+                        ? 'text-emerald-400 bg-emerald-500/20 border-emerald-500/40 animate-pulse hover:bg-emerald-500/30' 
+                        : 'text-amber-300 bg-amber-500/20 border-amber-500/40 hover:bg-amber-500/30'
+                    }`}
+                    title={isHabitRunningHere ? 'Timer Running (Click to Pause)' : 'Timer Paused (Click to Resume)'}
+                  >
+                    {isHabitRunningHere ? <Pause size={8} fill="currentColor" /> : <Play size={8} fill="currentColor" />}
+                    <span>{formatTime(elapsedSeconds)}</span>
+                  </button>
+                )}
+
+                {/* Quick Start Timer Icon for Time-Based Habits */}
+                {!isHabitActiveHere && isTimeBased && (
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      startTimer(habit);
+                    }}
+                    className="opacity-0 group-hover:opacity-100 text-gray-400 hover:text-emerald-400 p-0.5 rounded hover:bg-gray-800 transition shrink-0"
+                    title="Start Timer"
+                  >
+                    <Play size={10} fill="currentColor" />
+                  </button>
                 )}
               </div>
             </div>
@@ -328,69 +323,84 @@ export function HabitCard({
       {/* Right Heatmap / Interactive Input Cells */}
       <div className="flex-1 flex items-stretch min-w-0">
         {viewMode === 'day' ? (
-          /* Daily View: [-] on left, Centered Goal Number/Denominator in center, [+] on right */
+          /* Daily View: Horizontal Filling Progress Bar from left to right */
           (() => {
-            const day = weekDays[0] || selectedDate;
+            const day = weekDays[0];
             const dayStr = normalizeDateStr(day);
             const amount = habit.logs[dayStr] || 0;
             const isFuture = isBefore(todayStart, startOfDay(day));
             const isEditing = editingDayStr === dayStr;
 
-            let cellBg = 'transparent';
-            let cellText = `${amount}/${habit.quota}`;
+            let cellBg = habit.color;
+            let cellText = `${formatAmount(amount)}/${formatAmount(habit.quota)}`;
             let textColor = 'text-gray-200';
+            let progressPercent = 0;
 
             if (habit.type === 'START') {
               if (amount > 0) {
-                const ratio = Math.min(amount / habit.quota, 1);
+                progressPercent = Math.min(100, Math.round((amount / habit.quota) * 100));
                 cellBg = habit.color;
-                cellText = `${amount}/${habit.quota}`;
-                textColor = ratio >= 0.7 ? 'text-white font-bold' : 'text-gray-100 font-bold';
-              } else {
-                cellText = `0/${habit.quota}`;
-                textColor = 'text-gray-500 font-bold';
-              }
-            } else {
-              // STOP habit
-              if (amount === 0) {
-                if (!isFuture) {
-                  cellBg = '#22c55e'; // Green for clean stop habit
-                  cellText = `0/${habit.quota}`;
-                  textColor = 'text-white font-bold';
-                } else {
-                  cellText = `0/${habit.quota}`;
-                  textColor = 'text-gray-500 font-bold';
-                }
-              } else if (amount > habit.quota) {
-                cellBg = '#ef4444'; // Red for exceeding quota
-                cellText = `${amount}/${habit.quota}`;
+                cellText = `${formatAmount(amount)}/${formatAmount(habit.quota)}`;
                 textColor = 'text-white font-bold';
               } else {
-                cellBg = '#eab308'; // Warning/yellow for logged amount within quota
-                cellText = `${amount}/${habit.quota}`;
-                textColor = 'text-black font-bold';
+                progressPercent = 0;
+                cellText = `0/${formatAmount(habit.quota)}`;
+                textColor = 'text-gray-400 font-bold';
+              }
+            } else {
+              // STOP habit: reversed color gradient and progress bar
+              cellText = `${formatAmount(amount)}/${formatAmount(habit.quota)}`;
+              cellBg = habit.color || '#22c55e';
+              if (!isFuture) {
+                if (amount === 0) {
+                  progressPercent = 100;
+                  textColor = 'text-white font-bold';
+                } else if (amount < habit.quota) {
+                  progressPercent = Math.max(0, Math.round(((habit.quota - amount) / habit.quota) * 100));
+                  textColor = 'text-white font-bold';
+                } else if (amount === habit.quota) {
+                  // At the limit: 0% fill, number remains clearly visible in amber!
+                  progressPercent = 0;
+                  textColor = 'text-amber-300 font-extrabold';
+                } else {
+                  // Over the limit: 0% fill, number is visible in red!
+                  progressPercent = 0;
+                  textColor = 'text-red-400 font-extrabold';
+                }
+              } else {
+                progressPercent = 0;
+                textColor = 'text-gray-500 font-bold';
               }
             }
-
-            const opacity = habit.type === 'START' && amount > 0 
-              ? (amount >= habit.quota ? 1 : Math.max(0.35, Math.min(amount / habit.quota, 1)))
-              : (!isFuture && habit.type === 'STOP' && amount === 0 ? 1 : (amount > 0 ? 0.9 : 1));
 
             return (
               <div 
                 onClick={() => handleCellClick(day, dayStr, amount)}
-                className={`flex-1 flex items-center justify-center relative px-4 h-full transition-all ${
+                className={`flex-1 flex items-center justify-center relative px-4 h-full transition-all overflow-hidden ${
                   isFuture ? 'cursor-default' : 'cursor-pointer'
                 }`}
                 style={{
-                  backgroundColor: !isEditing && (amount > 0 || (habit.type === 'STOP' && !isFuture && amount === 0)) ? cellBg : undefined,
-                  opacity: !isEditing && isFuture ? 0.15 : (isEditing ? 1 : opacity),
+                  opacity: !isEditing && isFuture ? 0.15 : 1,
                 }}
-                title={isEditing ? '' : `${habit.name} - ${dayStr}: ${amount}/${habit.quota} ${habit.unit !== 'amount' ? habit.unit : ''}${isFuture ? ' (Future date)' : ' (Click to input number)'}`}
+                title={isEditing ? '' : `${habit.name} - ${dayStr}: ${formatAmount(amount)}/${formatAmount(habit.quota)} ${habit.unit !== 'amount' ? habit.unit : ''}${isFuture ? ' (Future date)' : ' (Click to input number)'}`}
               >
+                {/* Horizontal Left-to-Right Animated Progress Bar Fill */}
+                {!isEditing && !isFuture && progressPercent > 0 && (
+                  <div 
+                    className="absolute left-0 top-0 bottom-0 pointer-events-none transition-all duration-300 ease-out"
+                    style={{
+                      width: `${progressPercent}%`,
+                      background: habit.type === 'START' 
+                        ? `linear-gradient(90deg, ${cellBg}80 0%, ${cellBg} 100%)` 
+                        : `linear-gradient(90deg, ${cellBg} 0%, ${cellBg}cc 100%)`,
+                      boxShadow: progressPercent >= 100 ? `0 0 20px ${cellBg}40` : undefined,
+                    }}
+                  />
+                )}
+
                 {/* Left: Anchored - Button (Disabled for future dates) */}
                 {!isFuture && (
-                  <div className="absolute left-3 sm:left-4 flex items-center" onClick={(e) => e.stopPropagation()}>
+                  <div className="absolute left-3 sm:left-4 flex items-center z-10" onClick={(e) => e.stopPropagation()}>
                     <button
                       onClick={() => onLog(dayStr, Math.max(0, amount - stepAmount))}
                       className="w-7 h-7 flex items-center justify-center rounded-lg bg-gray-950/80 hover:bg-gray-900 text-gray-200 hover:text-white border border-gray-700/80 shadow-md backdrop-blur-sm transition-all active:scale-95 hover:border-gray-500"
@@ -403,7 +413,7 @@ export function HabitCard({
 
                 {/* Center: Goal Number / Denominator / Inline Input */}
                 {isEditing ? (
-                  <div className="flex items-center justify-center" onClick={(e) => e.stopPropagation()}>
+                  <div className="flex items-center justify-center z-10" onClick={(e) => e.stopPropagation()}>
                     <input
                       type="number"
                       min="0"
@@ -419,14 +429,34 @@ export function HabitCard({
                     />
                   </div>
                 ) : (
-                  <span className={`text-sm sm:text-base font-extrabold select-none transition-all drop-shadow-sm ${textColor}`}>
-                    {cellText}
-                  </span>
+                  <div className="flex items-center gap-2 z-10">
+                    <span className={`text-sm sm:text-base font-extrabold select-none transition-all drop-shadow-sm ${textColor}`}>
+                      {cellText}
+                    </span>
+                    {isTimeBased && !isFuture && (
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          if (isHabitRunningHere) pauseTimer();
+                          else if (isHabitActiveHere) resumeTimer();
+                          else startTimer(habit);
+                        }}
+                        className={`p-1 rounded-full transition shadow-sm ${
+                          isHabitRunningHere
+                            ? 'bg-emerald-500/20 text-emerald-400 hover:bg-emerald-500/30'
+                            : 'bg-gray-900/80 text-gray-400 hover:text-white border border-gray-700/70'
+                        }`}
+                        title={isHabitRunningHere ? 'Pause Timer' : 'Start Timer'}
+                      >
+                        {isHabitRunningHere ? <Pause size={10} fill="currentColor" /> : <Play size={10} fill="currentColor" />}
+                      </button>
+                    )}
+                  </div>
                 )}
 
                 {/* Right: Anchored + Button (Disabled for future dates) */}
                 {!isFuture && (
-                  <div className="absolute right-3 sm:right-4 flex items-center" onClick={(e) => e.stopPropagation()}>
+                  <div className="absolute right-3 sm:right-4 flex items-center z-10" onClick={(e) => e.stopPropagation()}>
                     <button
                       onClick={() => onLog(dayStr, amount + stepAmount)}
                       className="w-7 h-7 flex items-center justify-center rounded-lg bg-gray-950/80 hover:bg-gray-900 text-gray-200 hover:text-white border border-gray-700/80 shadow-md backdrop-blur-sm transition-all active:scale-95 hover:border-gray-500"
@@ -449,44 +479,52 @@ export function HabitCard({
             const renderDayCell = (day: Date) => {
               const dayStr = normalizeDateStr(day);
               const amount = habit.logs[dayStr] || 0;
-              const isSelected = isSameDay(day, selectedDate);
+              const isSelected = dayStr === selectedDateStr;
               const isFuture = isBefore(todayStart, startOfDay(day));
               const isEditing = editingDayStr === dayStr;
 
-              let cellBg = 'transparent';
-              let cellText = '';
-              let textColor = 'text-transparent group-hover/cell:text-gray-400';
+              let cellBg = habit.color;
+              let cellText = formatAmount(amount);
+              let textColor = 'text-gray-300 font-bold';
+              let fillOpacity = 0;
 
               if (habit.type === 'START') {
                 if (amount > 0) {
                   const ratio = Math.min(amount / habit.quota, 1);
                   cellBg = habit.color;
-                  cellText = `${amount}`;
-                  textColor = ratio >= 0.7 ? 'text-white font-bold' : 'text-gray-100 font-bold';
+                  cellText = formatAmount(amount);
+                  textColor = 'text-white font-bold';
+                  fillOpacity = amount >= habit.quota ? 1 : Math.max(0.35, ratio);
+                } else {
+                  cellText = '0';
+                  textColor = 'text-transparent group-hover/cell:text-gray-500 font-medium';
+                  fillOpacity = 0;
                 }
               } else {
-                // STOP habit
-                if (amount === 0) {
-                  if (!isFuture) {
-                    cellBg = '#22c55e'; // Green for clean stop habit
-                    cellText = '0';
+                // STOP habit: reversed color gradient (100% at 0, 50% at 1/2, 0% when over limit)
+                cellText = formatAmount(amount);
+                cellBg = habit.color || '#22c55e';
+                if (!isFuture) {
+                  if (amount === 0) {
+                    fillOpacity = 1;
                     textColor = 'text-white font-bold';
+                  } else if (amount < habit.quota) {
+                    fillOpacity = (habit.quota - amount) / habit.quota;
+                    textColor = 'text-white font-bold';
+                  } else if (amount === habit.quota) {
+                    // At the limit: 0% fill, number remains clearly visible in amber!
+                    fillOpacity = 0;
+                    textColor = 'text-amber-300 font-extrabold';
+                  } else {
+                    // Over the limit: 0% fill, number is visible in red!
+                    fillOpacity = 0;
+                    textColor = 'text-red-400 font-extrabold';
                   }
-                } else if (amount > habit.quota) {
-                  cellBg = '#ef4444'; // Red for exceeding quota
-                  cellText = `${amount}`;
-                  textColor = 'text-white font-bold';
                 } else {
-                  // Within allowance
-                  cellBg = '#eab308'; // Warning/amber for logged amount within quota
-                  cellText = `${amount}`;
-                  textColor = 'text-black font-bold';
+                  fillOpacity = 0;
+                  textColor = 'text-transparent group-hover/cell:text-gray-500 font-medium';
                 }
               }
-
-              const opacity = habit.type === 'START' && amount > 0 
-                ? (amount >= habit.quota ? 1 : Math.max(0.35, Math.min(amount / habit.quota, 1)))
-                : (!isFuture && habit.type === 'STOP' && amount === 0 ? 1 : (amount > 0 ? 0.9 : 1));
 
               const effectiveShowBorders = showBorders && !isYearView;
 
@@ -502,14 +540,24 @@ export function HabitCard({
                     isFuture ? 'cursor-default' : 'cursor-pointer hover:brightness-110 hover:bg-gray-800/30'
                   }`}
                   style={{
-                    backgroundColor: !isEditing && (amount > 0 || (habit.type === 'STOP' && !isFuture && amount === 0)) ? cellBg : undefined,
-                    opacity: !isEditing && isFuture ? 0.12 : (isEditing ? 1 : opacity),
+                    opacity: !isEditing && isFuture ? 0.15 : 1,
                   }}
-                  title={isEditing ? '' : isYearView ? `${format(day, 'EEEE, MMMM d, yyyy')} - ${habit.name}: ${amount} ${habit.unit !== 'amount' ? habit.unit : ''} (Click to open Daily View)` : `${habit.name} - ${dayStr}: ${amount} ${habit.unit !== 'amount' ? habit.unit : ''}${isFuture ? ' (Future date)' : ' (Click to input number)'}`}
+                  title={isEditing ? '' : isYearView ? `${format(day, 'EEEE, MMMM d, yyyy')} - ${habit.name}: ${formatAmount(amount)} ${habit.unit !== 'amount' ? habit.unit : ''} (Click to open Daily View)` : `${habit.name} - ${dayStr}: ${formatAmount(amount)} ${habit.unit !== 'amount' ? habit.unit : ''}${isFuture ? ' (Future date)' : ' (Click to input number)'}`}
                 >
+                  {/* Background fill layer */}
+                  {!isEditing && !isFuture && fillOpacity > 0 && (
+                    <div 
+                      className="absolute inset-0 pointer-events-none transition-all"
+                      style={{
+                        backgroundColor: cellBg,
+                        opacity: fillOpacity,
+                      }}
+                    />
+                  )}
+
                   {isEditing ? (
                     /* Inline number input mode */
-                    <div className="w-full h-full p-1 flex items-center justify-center" onClick={(e) => e.stopPropagation()}>
+                    <div className="w-full h-full p-1 flex items-center justify-center z-10" onClick={(e) => e.stopPropagation()}>
                       <input
                         type="number"
                         min="0"
@@ -530,7 +578,7 @@ export function HabitCard({
                     <>
                       {/* Numbers are completely OFF in yearly view, and controlled by showNumbers in other views */}
                       {!isYearView && showNumbers && (
-                        <span className={`text-[10px] sm:text-xs font-bold select-none transition-all ${textColor}`}>
+                        <span className={`text-[10px] sm:text-xs z-10 select-none transition-all ${textColor}`}>
                           {cellText}
                         </span>
                       )}
@@ -542,11 +590,11 @@ export function HabitCard({
                             <span className="font-semibold text-gray-300">{format(day, 'EEE, MMM d, yyyy')}</span>
                             <span className="text-gray-500">•</span>
                             <span className={amount > 0 ? 'text-blue-400 font-bold' : 'text-gray-400'}>
-                              {amount > 0 ? `${amount} ${unitLabel(habit.unit)}` : (isFuture ? 'Future date' : '0')}
+                              {amount > 0 ? `${formatAmount(amount)} ${unitLabel(habit.unit)}` : (isFuture ? 'Future date' : '0')}
                             </span>
                           </span>
                         ) : (
-                          amount > 0 ? `${amount} ${unitLabel(habit.unit)}` : (isFuture ? 'Future date' : 'Click to input number')
+                          amount > 0 ? `${formatAmount(amount)} ${unitLabel(habit.unit)}` : (isFuture ? 'Future date' : 'Click to input number')
                         )}
                       </div>
                     </>
@@ -555,9 +603,12 @@ export function HabitCard({
               );
             };
 
-            // If grouping is enabled, and this timeframe chunk is complete and has multiple days:
-            if (groupingEnabled && chunk.isComplete && !isSingle) {
-              const fullColor = habit.type === 'START' ? habit.color : '#22c55e';
+            // If cell grouping is enabled, and this timeframe chunk is complete and has multiple days:
+            if (isCellGrouping && chunk.isComplete && !isSingle) {
+              const fullColor = habit.color || (habit.type === 'START' ? '#3b82f6' : '#22c55e');
+              const chunkOpacity = habit.type === 'START' 
+                ? 1 
+                : (habit.quota > 0 ? Math.max(0, Math.min((habit.quota - chunk.amount) / habit.quota, 1)) : 1);
               const effectiveShowBorders = showBorders && !isYearView;
 
               return (
@@ -566,7 +617,7 @@ export function HabitCard({
                   className="relative group/chunk flex items-stretch h-full min-w-0"
                   style={{ flex: `${chunk.days.length} 0 0%` }}
                 >
-                  {/* Combined 100% Color Bar: Suffix text only when showNumbers is ON and not year view */}
+                  {/* Combined Color Bar: Suffix text only when showNumbers is ON and not year view */}
                   {!hasEditingCell && (
                     <div
                       className={`absolute inset-0 flex items-center justify-center group-hover/chunk:hidden z-10 transition-all cursor-pointer shadow-inner ${
@@ -574,16 +625,17 @@ export function HabitCard({
                       }`}
                       style={{
                         backgroundColor: fullColor,
+                        opacity: chunkOpacity,
                         color: '#ffffff'
                       }}
-                      title={`${habit.name} - Goal Complete! Hover to see individual days`}
+                      title={`${habit.name} - ${habit.type === 'START' ? 'Goal Complete!' : 'Within Allowance!'} Hover to see individual days`}
                     >
                       {!isYearView && showNumbers && (
                         <div className="flex items-center justify-center font-extrabold text-xs tracking-wide px-1.5 drop-shadow truncate">
                           <span className="truncate">
                             {viewMode === 'month' && habit.timeframe === 'weekly' 
-                              ? `${chunk.amount}/${habit.quota}` 
-                              : `${chunk.amount}/${habit.quota} ${unitLabel(habit.unit)}`}
+                              ? `${formatAmount(chunk.amount)}/${formatAmount(habit.quota)}` 
+                              : `${formatAmount(chunk.amount)}/${formatAmount(habit.quota)} ${unitLabel(habit.unit)}`}
                           </span>
                         </div>
                       )}

@@ -63,9 +63,5 @@ export function useHabits() {
     }));
   };
 
-  const reorderHabits = (newOrder: Habit[]) => {
-    setHabits(newOrder);
-  };
-
-  return { habits, addHabit, updateHabit, deleteHabit, deleteHabits, setLog, reorderHabits, isLoaded };
+  return { habits, addHabit, updateHabit, deleteHabit, deleteHabits, setLog, isLoaded };
 }
