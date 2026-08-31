@@ -4,6 +4,7 @@ import { useState, useMemo } from 'react';
 import { Habit, HabitType, Timeframe, HabitUnit } from '../types';
 import { X, Trash2, Tag, Shuffle } from 'lucide-react';
 import { ICONS, COLORS, UNITS, getRandomIcon, getRandomColor } from '../lib/constants';
+import { normalizeDateStr } from '../lib/habitUtils';
 
 interface Props {
   initialHabit?: Habit;
@@ -22,7 +23,7 @@ export function HabitForm({ initialHabit, existingGroups = [], onSave, onCancel,
   const [unit, setUnit] = useState<HabitUnit>(initialHabit?.unit || 'amount');
   const [quota, setQuota] = useState(initialHabit?.quota || 1);
   const [timeframe, setTimeframe] = useState<Timeframe>(initialHabit?.timeframe || 'daily');
-  const [startDate] = useState(initialHabit?.startDate || new Date().toISOString().split('T')[0]);
+  const [startDate] = useState(initialHabit?.startDate ? normalizeDateStr(initialHabit.startDate) : normalizeDateStr(new Date()));
   
   // Popover Drawer states
   const [activePicker, setActivePicker] = useState<'icon' | 'color' | null>(null);
@@ -92,7 +93,6 @@ export function HabitForm({ initialHabit, existingGroups = [], onSave, onCancel,
                 setColor(getRandomColor());
               }}
               className="text-[11px] font-medium text-gray-400 hover:text-blue-400 flex items-center gap-1 transition-colors px-1.5 py-0.5 rounded-md hover:bg-gray-800/80 active:scale-95"
-              title="Randomize emoji and color"
             >
               <Shuffle size={11} />
               <span>Randomize</span>
@@ -104,7 +104,6 @@ export function HabitForm({ initialHabit, existingGroups = [], onSave, onCancel,
               type="button"
               onClick={() => setActivePicker(activePicker === 'icon' ? null : 'icon')}
               className="w-9 h-9 rounded-lg flex items-center justify-center text-xl bg-gray-800 hover:bg-gray-700 border border-gray-700/70 transition shrink-0 active:scale-95"
-              title="Click to choose icon"
             >
               {icon}
             </button>
@@ -114,7 +113,6 @@ export function HabitForm({ initialHabit, existingGroups = [], onSave, onCancel,
               type="button"
               onClick={() => setActivePicker(activePicker === 'color' ? null : 'color')}
               className="w-9 h-9 rounded-lg flex items-center justify-center bg-gray-800 hover:bg-gray-700 border border-gray-700/70 transition shrink-0 active:scale-95 group/col"
-              title="Click to choose accent color"
             >
               <div 
                 className="w-4 h-4 rounded-full border-2 border-white/40 shadow-sm group-hover/col:scale-110 transition"

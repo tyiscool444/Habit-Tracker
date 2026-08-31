@@ -1,24 +1,28 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useSyncExternalStore } from 'react';
 import { Habit } from '../types';
 
-export function useHabits() {
-  const [habits, setHabits] = useState<Habit[]>([]);
-  const [isLoaded, setIsLoaded] = useState(false);
+const emptySubscribe = () => () => {};
 
-  // Load from localStorage on mount
-  useEffect(() => {
-    const saved = localStorage.getItem('habits-v2');
-    if (saved) {
+export function useHabits() {
+  const isLoaded = useSyncExternalStore(
+    emptySubscribe,
+    () => true,
+    () => false
+  );
+
+  const [habits, setHabits] = useState<Habit[]>(() => {
+    if (typeof window !== 'undefined') {
       try {
-        setHabits(JSON.parse(saved));
-      } catch (e) {
-        console.error('Failed to parse habits', e);
+        const saved = localStorage.getItem('habits-v2');
+        if (saved) return JSON.parse(saved);
+      } catch {
+        // Fallback for corrupted storage
       }
     }
-    setIsLoaded(true);
-  }, []);
+    return [];
+  });
 
   // Save to localStorage whenever habits change
   useEffect(() => {

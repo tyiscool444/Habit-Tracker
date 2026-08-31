@@ -4,8 +4,8 @@ import { Habit } from '../types';
 import { unitLabel, timeframeSuffix, getAmountInInterval, normalizeDateStr, formatAmount } from '../lib/habitUtils';
 import { useHabitTimer } from '../context/TimerContext';
 import { 
-  X, Flame, Target, Trophy, Calendar, CheckCircle2, TrendingUp, BarChart3,
-  Clock, Play, Pause, RotateCcw, Plus, Square, Timer as TimerIcon
+  X, Target, Trophy, Calendar, TrendingUp, BarChart3,
+  Clock, Play, Pause, Square, Timer as TimerIcon
 } from 'lucide-react';
 import {
   format,
@@ -40,7 +40,6 @@ export function HabitInsightsModal({ habit, onClose, onEdit }: Props) {
     pauseTimer,
     resumeTimer,
     stopTimer,
-    resetTimer,
     addSeconds,
     formatTime,
   } = useHabitTimer();
@@ -53,7 +52,7 @@ export function HabitInsightsModal({ habit, onClose, onEdit }: Props) {
   // Calculate lifetime total logged
   let totalAmountLogged = 0;
   let loggedDaysCount = 0;
-  Object.entries(habit.logs).forEach(([_, val]) => {
+  Object.values(habit.logs).forEach((val) => {
     if (val > 0) {
       totalAmountLogged += val;
       loggedDaysCount++;
@@ -244,7 +243,6 @@ export function HabitInsightsModal({ habit, onClose, onEdit }: Props) {
                   addSeconds(300); // +5m
                 }}
                 className="px-2.5 py-2 rounded-lg bg-gray-900 hover:bg-gray-800 text-gray-300 hover:text-white border border-gray-800 text-xs font-bold transition"
-                title="Add 5 Minutes"
               >
                 +5m
               </button>
@@ -255,7 +253,6 @@ export function HabitInsightsModal({ habit, onClose, onEdit }: Props) {
                   addSeconds(900); // +15m
                 }}
                 className="px-2.5 py-2 rounded-lg bg-gray-900 hover:bg-gray-800 text-gray-300 hover:text-white border border-gray-800 text-xs font-bold transition"
-                title="Add 15 Minutes"
               >
                 +15m
               </button>
@@ -266,7 +263,6 @@ export function HabitInsightsModal({ habit, onClose, onEdit }: Props) {
                   addSeconds(1500); // +25m Pomodoro
                 }}
                 className="px-2.5 py-2 rounded-lg bg-purple-600/20 hover:bg-purple-600/30 text-purple-300 hover:text-white border border-purple-500/40 text-xs font-bold transition"
-                title="Add 25m Pomodoro Session"
               >
                 +25m
               </button>
@@ -278,7 +274,6 @@ export function HabitInsightsModal({ habit, onClose, onEdit }: Props) {
                 type="button"
                 onClick={stopTimer}
                 className="p-2 rounded-lg bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/30 transition"
-                title="Stop and finish timer"
               >
                 <Square size={14} fill="currentColor" />
               </button>

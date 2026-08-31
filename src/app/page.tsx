@@ -17,9 +17,78 @@ import { normalizeDateStr, getAmountInInterval } from '../lib/habitUtils';
 import {
   addDays, isSameDay, format, getDaysInMonth, startOfMonth, endOfMonth,
   addMonths, startOfWeek, endOfWeek, startOfYear, endOfYear, addYears,
-  eachDayOfInterval, isSameMonth
+  eachDayOfInterval, isSameMonth, parseISO
 } from 'date-fns';
 import { Habit, HabitType, Timeframe } from '../types';
+
+function Modal({
+  isOpen,
+  onClose,
+  maxWidth = 'max-w-md',
+  children,
+}: {
+  isOpen: boolean;
+  onClose: () => void;
+  maxWidth?: string;
+  children: React.ReactNode;
+}) {
+  if (!isOpen) return null;
+  return (
+    <div
+      onClick={onClose}
+      className="fixed inset-0 bg-black/75 backdrop-blur-md z-50 flex items-center justify-center p-4 cursor-pointer animate-in fade-in duration-200"
+    >
+      <div onClick={(e) => e.stopPropagation()} className={`cursor-default w-full ${maxWidth}`}>
+        {children}
+      </div>
+    </div>
+  );
+}
+
+function groupItemsByCategory<T extends { group?: string }>(items: T[]) {
+  const hasAnyGroup = items.some(item => Boolean(item.group && item.group.trim()));
+  if (!hasAnyGroup) {
+    return [{ name: '', isUngrouped: true, items }];
+  }
+
+  const groupMap = new Map<string, T[]>();
+  const ungrouped: T[] = [];
+
+  items.forEach(item => {
+    const g = item.group?.trim();
+    if (g) {
+      if (!groupMap.has(g)) groupMap.set(g, []);
+      groupMap.get(g)!.push(item);
+    } else {
+      ungrouped.push(item);
+    }
+  });
+
+  const result: { name: string; isUngrouped: boolean; items: T[] }[] = [];
+  groupMap.forEach((list, name) => {
+    result.push({ name, isUngrouped: false, items: list });
+  });
+  if (ungrouped.length > 0) {
+    result.push({ name: 'General / Other', isUngrouped: true, items: ungrouped });
+  }
+  return result;
+}
+
+function sortTasksByUpcoming(tasks: Habit[]) {
+  return [...tasks].sort((a, b) => {
+    const aDateStr = normalizeDateStr(a.targetDate || a.startDate || new Date());
+    const bDateStr = normalizeDateStr(b.targetDate || b.startDate || new Date());
+
+    const aTime = parseISO(aDateStr).getTime();
+    const bTime = parseISO(bDateStr).getTime();
+
+    if (aTime !== bTime) {
+      return aTime - bTime;
+    }
+
+    return a.name.localeCompare(b.name);
+  });
+}
 
 export default function Home() {
   const { habits, addHabit, updateHabit, deleteHabit, deleteHabits, setLog, isLoaded } = useHabits();
@@ -129,18 +198,14 @@ export default function Home() {
 
   // Filter evaluation predicate
   const matchesFilter = useCallback((h: Habit): boolean => {
-    // Search query
     if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase();
       const matchName = h.name.toLowerCase().includes(q);
       const matchGroup = h.group?.toLowerCase().includes(q);
       if (!matchName && !matchGroup) return false;
     }
-    // Type filter
     if (filterType !== 'all' && h.type !== filterType) return false;
-    // Timeframe filter (for recurring)
     if (filterTimeframe !== 'all' && h.isRecurring !== false && h.timeframe !== filterTimeframe) return false;
-    // Group filter
     if (filterGroup !== 'all') {
       if (filterGroup === '__ungrouped__') {
         if (h.group && h.group.trim()) return false;
@@ -148,7 +213,6 @@ export default function Home() {
         if (h.group?.trim().toLowerCase() !== filterGroup.toLowerCase()) return false;
       }
     }
-    // Completion Status filter
     if (filterStatus !== 'all') {
       const isDone = isHabitCompletedForPeriod(h);
       if (filterStatus === 'completed' && !isDone) return false;
@@ -160,6 +224,9 @@ export default function Home() {
   // Filtered lists
   const filteredRecurringHabits = useMemo(() => recurringHabits.filter(matchesFilter), [recurringHabits, matchesFilter]);
   const filteredOneOffTasks = useMemo(() => oneOffTasks.filter(matchesFilter), [oneOffTasks, matchesFilter]);
+
+  // Sort filtered one-off tasks by upcoming due date
+  const sortedOneOffTasks = useMemo(() => sortTasksByUpcoming(filteredOneOffTasks), [filteredOneOffTasks]);
 
   // Active filters count
   const activeFiltersCount = useMemo(() => {
@@ -180,65 +247,15 @@ export default function Home() {
     setFilterGroup('all');
   };
 
-  // Group filtered recurring habits by category
-  const groupedRecurringHabits = useMemo(() => {
-    const hasAnyGroup = filteredRecurringHabits.some(h => Boolean(h.group && h.group.trim()));
-    if (!hasAnyGroup) {
-      return [{ name: '', isUngrouped: true, habits: filteredRecurringHabits }];
-    }
-
-    const groupMap = new Map<string, typeof filteredRecurringHabits>();
-    const ungrouped: typeof filteredRecurringHabits = [];
-
-    filteredRecurringHabits.forEach(h => {
-      const g = h.group?.trim();
-      if (g) {
-        if (!groupMap.has(g)) groupMap.set(g, []);
-        groupMap.get(g)!.push(h);
-      } else {
-        ungrouped.push(h);
-      }
-    });
-
-    const result: { name: string; isUngrouped: boolean; habits: typeof filteredRecurringHabits }[] = [];
-    groupMap.forEach((list, name) => {
-      result.push({ name, isUngrouped: false, habits: list });
-    });
-    if (ungrouped.length > 0) {
-      result.push({ name: 'General / Other', isUngrouped: true, habits: ungrouped });
-    }
-    return result;
-  }, [filteredRecurringHabits]);
-
-  // Group filtered one-off tasks by category
+  // Group filtered items by category using the shared helper
+  const groupedRecurringHabits = useMemo(() => groupItemsByCategory(filteredRecurringHabits), [filteredRecurringHabits]);
   const groupedOneOffTasks = useMemo(() => {
-    const hasAnyGroup = filteredOneOffTasks.some(t => Boolean(t.group && t.group.trim()));
-    if (!hasAnyGroup) {
-      return [{ name: '', isUngrouped: true, tasks: filteredOneOffTasks }];
-    }
-
-    const groupMap = new Map<string, typeof filteredOneOffTasks>();
-    const ungrouped: typeof filteredOneOffTasks = [];
-
-    filteredOneOffTasks.forEach(t => {
-      const g = t.group?.trim();
-      if (g) {
-        if (!groupMap.has(g)) groupMap.set(g, []);
-        groupMap.get(g)!.push(t);
-      } else {
-        ungrouped.push(t);
-      }
-    });
-
-    const result: { name: string; isUngrouped: boolean; tasks: typeof filteredOneOffTasks }[] = [];
-    groupMap.forEach((tasks, name) => {
-      result.push({ name, isUngrouped: false, tasks });
-    });
-    if (ungrouped.length > 0) {
-      result.push({ name: 'General / Other', isUngrouped: true, tasks: ungrouped });
-    }
-    return result;
-  }, [filteredOneOffTasks]);
+    const groups = groupItemsByCategory(sortedOneOffTasks);
+    return groups.map(g => ({
+      ...g,
+      items: sortTasksByUpcoming(g.items),
+    }));
+  }, [sortedOneOffTasks]);
 
   // Completion metrics for Daily, Weekly, and Monthly goals (recurring habits)
   const completionStats = useMemo(() => {
@@ -439,7 +456,6 @@ export default function Home() {
                     type="button"
                     onClick={clearAllFilters}
                     className="px-2.5 py-1.5 rounded-xl text-xs font-semibold bg-red-500/10 text-red-400 hover:bg-red-500/20 border border-red-500/30 transition flex items-center gap-1"
-                    title="Clear all active filters"
                   >
                     <X size={12} />
                     <span>Clear</span>
@@ -561,72 +577,48 @@ export default function Home() {
         )}
 
         {/* Modal: Add Recurring Habit */}
-        {showHabitForm && (
-          <div
-            onClick={() => setShowHabitForm(false)}
-            className="fixed inset-0 bg-black/75 backdrop-blur-md z-50 flex items-center justify-center p-4 cursor-pointer animate-in fade-in duration-200"
-          >
-            <div onClick={(e) => e.stopPropagation()} className="cursor-default w-full max-w-md">
-              <HabitForm
-                existingGroups={existingGroups}
-                onSave={(h) => { addHabit(h); setShowHabitForm(false); }}
-                onCancel={() => setShowHabitForm(false)}
-              />
-            </div>
-          </div>
-        )}
+        <Modal isOpen={showHabitForm} onClose={() => setShowHabitForm(false)}>
+          <HabitForm
+            existingGroups={existingGroups}
+            onSave={(h) => { addHabit(h); setShowHabitForm(false); }}
+            onCancel={() => setShowHabitForm(false)}
+          />
+        </Modal>
 
         {/* Modal: Edit Recurring Habit */}
-        {editingHabitId && editingHabit && (
-          <div
-            onClick={() => setEditingHabitId(null)}
-            className="fixed inset-0 bg-black/75 backdrop-blur-md z-50 flex items-center justify-center p-4 cursor-pointer animate-in fade-in duration-200"
-          >
-            <div onClick={(e) => e.stopPropagation()} className="cursor-default w-full max-w-md">
-              <HabitForm
-                initialHabit={editingHabit}
-                existingGroups={existingGroups}
-                onSave={(h) => { updateHabit(h); setEditingHabitId(null); }}
-                onCancel={() => setEditingHabitId(null)}
-                onDelete={() => { deleteHabit(editingHabit.id); setEditingHabitId(null); }}
-              />
-            </div>
-          </div>
-        )}
+        <Modal isOpen={Boolean(editingHabitId && editingHabit)} onClose={() => setEditingHabitId(null)}>
+          {editingHabit && (
+            <HabitForm
+              initialHabit={editingHabit}
+              existingGroups={existingGroups}
+              onSave={(h) => { updateHabit(h); setEditingHabitId(null); }}
+              onCancel={() => setEditingHabitId(null)}
+              onDelete={() => { deleteHabit(editingHabit.id); setEditingHabitId(null); }}
+            />
+          )}
+        </Modal>
 
         {/* Modal: Add One-Off Task */}
-        {showTaskForm && (
-          <div
-            onClick={() => setShowTaskForm(false)}
-            className="fixed inset-0 bg-black/75 backdrop-blur-md z-50 flex items-center justify-center p-4 cursor-pointer animate-in fade-in duration-200"
-          >
-            <div onClick={(e) => e.stopPropagation()} className="cursor-default w-full max-w-md">
-              <TaskForm
-                existingGroups={existingGroups}
-                onSave={(t) => { addHabit(t); setShowTaskForm(false); }}
-                onCancel={() => setShowTaskForm(false)}
-              />
-            </div>
-          </div>
-        )}
+        <Modal isOpen={showTaskForm} onClose={() => setShowTaskForm(false)}>
+          <TaskForm
+            existingGroups={existingGroups}
+            onSave={(t) => { addHabit(t); setShowTaskForm(false); }}
+            onCancel={() => setShowTaskForm(false)}
+          />
+        </Modal>
 
         {/* Modal: Edit One-Off Task */}
-        {editingTaskId && editingTask && (
-          <div
-            onClick={() => setEditingTaskId(null)}
-            className="fixed inset-0 bg-black/75 backdrop-blur-md z-50 flex items-center justify-center p-4 cursor-pointer animate-in fade-in duration-200"
-          >
-            <div onClick={(e) => e.stopPropagation()} className="cursor-default w-full max-w-md">
-              <TaskForm
-                initialTask={editingTask}
-                existingGroups={existingGroups}
-                onSave={(t) => { updateHabit(t); setEditingTaskId(null); }}
-                onCancel={() => setEditingTaskId(null)}
-                onDelete={() => { deleteHabit(editingTask.id); setEditingTaskId(null); }}
-              />
-            </div>
-          </div>
-        )}
+        <Modal isOpen={Boolean(editingTaskId && editingTask)} onClose={() => setEditingTaskId(null)}>
+          {editingTask && (
+            <TaskForm
+              initialTask={editingTask}
+              existingGroups={existingGroups}
+              onSave={(t) => { updateHabit(t); setEditingTaskId(null); }}
+              onCancel={() => setEditingTaskId(null)}
+              onDelete={() => { deleteHabit(editingTask.id); setEditingTaskId(null); }}
+            />
+          )}
+        </Modal>
 
         {/* Modal: Habit Insights */}
         {insightsHabitId && insightsHabit && (
@@ -651,7 +643,6 @@ export default function Home() {
                   <button
                     onClick={() => changeDate(viewMode === 'year' ? -1 : (viewMode === 'week' ? -7 : -1))}
                     className="p-1.5 hover:bg-gray-800 text-gray-400 hover:text-white transition border-r border-gray-800"
-                    title={viewMode === 'year' ? 'Previous Year' : (viewMode === 'month' ? 'Previous Month' : (viewMode === 'week' ? 'Previous Week' : 'Previous Day'))}
                   >
                     <ChevronLeft size={16} />
                   </button>
@@ -667,7 +658,6 @@ export default function Home() {
                   <button
                     onClick={() => changeDate(viewMode === 'year' ? 1 : (viewMode === 'week' ? 7 : 1))}
                     className="p-1.5 hover:bg-gray-800 text-gray-400 hover:text-white transition border-l border-gray-800"
-                    title={viewMode === 'year' ? 'Next Year' : (viewMode === 'month' ? 'Next Month' : (viewMode === 'week' ? 'Next Week' : 'Next Day'))}
                   >
                     <ChevronRight size={16} />
                   </button>
@@ -695,7 +685,6 @@ export default function Home() {
                       ? 'bg-blue-600/20 text-blue-400 border-blue-500/40 shadow-sm'
                       : 'bg-gray-900 text-gray-400 border-gray-800 hover:text-white'
                       }`}
-                    title={showNumbers ? 'Numbers: Visible (Click to hide)' : 'Numbers: Hidden (Click to show)'}
                   >
                     <Hash size={13} />
                     <span>Numbers {showNumbers ? 'ON' : 'OFF'}</span>
@@ -709,7 +698,6 @@ export default function Home() {
                     ? 'bg-purple-600/20 text-purple-400 border-purple-500/40 shadow-sm'
                     : 'bg-gray-900 text-gray-400 border-gray-800 hover:text-white'
                     }`}
-                  title={categoryGroupingEnabled ? 'Groups: ON (Click to show flat list)' : 'Groups: OFF (Click to organize by categories)'}
                 >
                   <Tag size={13} />
                   <span>Groups {categoryGroupingEnabled ? 'ON' : 'OFF'}</span>
@@ -723,7 +711,6 @@ export default function Home() {
                       ? 'bg-indigo-600/20 text-indigo-400 border-indigo-500/40 shadow-sm'
                       : 'bg-gray-900 text-gray-400 border-gray-800 hover:text-white'
                       }`}
-                    title={cellGroupingEnabled ? 'Cell Grouping: ON (Click to display individual cells)' : 'Cell Grouping: OFF (Click to merge completed cells)'}
                   >
                     <Layers size={13} />
                     <span>Cell Grouping {cellGroupingEnabled ? 'ON' : 'OFF'}</span>
@@ -738,7 +725,6 @@ export default function Home() {
                       ? 'bg-emerald-600/20 text-emerald-400 border-emerald-500/40 shadow-sm'
                       : 'bg-gray-900 text-gray-400 border-gray-800 hover:text-white'
                       }`}
-                    title={showBorders ? 'Borders: Visible (Click to hide cell borders)' : 'Borders: Hidden (Click to show cell borders)'}
                   >
                     <Grid size={13} />
                     <span>Borders {showBorders ? 'ON' : 'OFF'}</span>
@@ -767,7 +753,6 @@ export default function Home() {
                   onClick={() => scrollDays('left')}
                   className={`absolute top-1/2 -translate-y-1/2 z-30 w-7 h-7 bg-gray-900/95 hover:bg-blue-600 text-white rounded-full flex items-center justify-center shadow-2xl border border-gray-700 hover:border-blue-500 backdrop-blur-md transition-all hover:scale-110 ${viewMode === 'week' ? 'left-[235px] sm:left-[275px] md:left-[295px]' : 'left-[385px] sm:left-[465px] md:left-[525px]'
                     }`}
-                  title="Scroll Left"
                 >
                   <ChevronLeft size={16} />
                 </button>
@@ -777,7 +762,6 @@ export default function Home() {
                 <button
                   onClick={() => scrollDays('right')}
                   className="absolute right-2 top-1/2 -translate-y-1/2 z-30 w-7 h-7 bg-gray-900/95 hover:bg-blue-600 text-white rounded-full flex items-center justify-center shadow-2xl border border-gray-700 hover:border-blue-500 backdrop-blur-md transition-all hover:scale-110"
-                  title="Scroll Right"
                 >
                   <ChevronRight size={16} />
                 </button>
@@ -823,7 +807,6 @@ export default function Home() {
                               className={`flex items-center justify-center text-[10px] font-bold tracking-wider uppercase transition-colors cursor-pointer ${isCurrentMonth ? 'text-blue-400 bg-blue-600/10' : 'text-gray-400 hover:bg-gray-800/30 hover:text-gray-200'
                                 }`}
                               style={{ flex: `${daysCount} 0 0%` }}
-                              title={`Click to view ${format(monthDate, 'MMMM yyyy')} in monthly view`}
                             >
                               {format(monthDate, 'MMM')}
                             </div>
@@ -847,7 +830,6 @@ export default function Home() {
                                   ? 'bg-blue-600/20 border-t-2 border-t-blue-500 shadow-inner'
                                   : 'hover:bg-gray-800/40'
                                 }`}
-                              title={format(day, 'EEEE, MMMM d, yyyy')}
                             >
                               {viewMode !== 'day' && (
                                 <span className={`text-[8px] sm:text-[9px] font-semibold uppercase transition-colors ${isSelected ? 'text-blue-400 font-bold' : 'text-gray-500'}`}>
@@ -884,14 +866,14 @@ export default function Home() {
                               {grp.name || 'General / Other'}
                             </span>
                             <span className="text-[10px] font-semibold text-gray-400 bg-gray-900 px-2 py-0.5 rounded-full border border-gray-700/60">
-                              {grp.habits.length} {grp.habits.length === 1 ? 'habit' : 'habits'}
+                              {grp.items.length} {grp.items.length === 1 ? 'habit' : 'habits'}
                             </span>
                           </div>
                         </div>
 
                         {/* Habit Cards in this Group */}
                         <div className="flex flex-col gap-0 divide-y divide-gray-800/80">
-                          {grp.habits.map((habit) => (
+                          {grp.items.map((habit) => (
                             <HabitCard
                               key={habit.id}
                               habit={habit}
@@ -968,7 +950,7 @@ export default function Home() {
           </div>
         )}
 
-        {/* Section 2: Dedicated One-Off Tasks & Goals Table (Matching Layout) */}
+        {/* Section 2: Dedicated One-Off Tasks & Goals Table */}
         {oneOffTasks.length > 0 ? (
           <div className="bg-[#090a0d] border border-gray-800 rounded-xl overflow-hidden shadow-2xl">
             {/* Top Header Bar */}
@@ -994,7 +976,6 @@ export default function Home() {
                   <button
                     onClick={clearCompletedOneOffTasks}
                     className="px-2.5 py-1 text-xs font-semibold rounded-lg bg-red-500/10 text-red-400 hover:bg-red-500/20 border border-red-500/30 transition flex items-center gap-1.5 shadow-sm"
-                    title="Delete all completed one-off tasks"
                   >
                     <Trash2 size={12} />
                     <span>Clear Completed ({completedOneOffCount})</span>
@@ -1019,19 +1000,20 @@ export default function Home() {
                         {grp.name || 'General / Other'}
                       </span>
                       <span className="text-[10px] font-semibold text-gray-400 bg-gray-900 px-2 py-0.5 rounded-full border border-gray-700/60">
-                        {grp.tasks.length} {grp.tasks.length === 1 ? 'task' : 'tasks'}
+                        {grp.items.length} {grp.items.length === 1 ? 'task' : 'tasks'}
                       </span>
                     </div>
                   </div>
 
                   {/* Task Rows in this Group */}
                   <div className="flex flex-col gap-0 divide-y divide-gray-800/80">
-                    {grp.tasks.map((task) => (
+                    {grp.items.map((task) => (
                       <OneOffTaskCard
                         key={task.id}
                         task={task}
                         onLog={setLog.bind(null, task.id)}
                         onEdit={() => setEditingTaskId(task.id)}
+                        onUpdateTask={updateHabit}
                       />
                     ))}
                   </div>
@@ -1039,12 +1021,13 @@ export default function Home() {
               ))
             ) : (
               <div className="flex flex-col gap-0 divide-y divide-gray-800/80">
-                {filteredOneOffTasks.map((task) => (
+                {sortedOneOffTasks.map((task) => (
                   <OneOffTaskCard
                     key={task.id}
                     task={task}
                     onLog={setLog.bind(null, task.id)}
                     onEdit={() => setEditingTaskId(task.id)}
+                    onUpdateTask={updateHabit}
                   />
                 ))}
               </div>

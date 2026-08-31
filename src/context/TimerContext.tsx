@@ -40,41 +40,42 @@ export function TimerProvider({
   habits: Habit[];
   setLog: (habitId: string, dateStr: string, amount: number) => void;
 }) {
-  const [timerState, setTimerState] = useState<TimerState>({
-    activeHabitId: null,
-    isRunning: false,
-    elapsedSeconds: 0,
-    initialTodayAmount: 0,
-    startedAt: null,
+  const [timerState, setTimerState] = useState<TimerState>(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const saved = localStorage.getItem(STORAGE_KEY);
+        if (saved) {
+          const parsed: TimerState = JSON.parse(saved);
+          if (parsed.activeHabitId) {
+            if (parsed.isRunning && parsed.startedAt) {
+              const now = Date.now();
+              const additionalSec = Math.floor((now - parsed.startedAt) / 1000);
+              parsed.elapsedSeconds += additionalSec;
+              parsed.startedAt = now;
+            }
+            return parsed;
+          }
+        }
+      } catch {
+        // Fallback for corrupted timer state
+      }
+    }
+    return {
+      activeHabitId: null,
+      isRunning: false,
+      elapsedSeconds: 0,
+      initialTodayAmount: 0,
+      startedAt: null,
+    };
   });
 
   const habitsRef = useRef(habits);
-  habitsRef.current = habits;
-
   const setLogRef = useRef(setLog);
-  setLogRef.current = setLog;
 
-  // Restore active timer from localStorage on mount
   useEffect(() => {
-    try {
-      const saved = localStorage.getItem(STORAGE_KEY);
-      if (saved) {
-        const parsed: TimerState = JSON.parse(saved);
-        if (parsed.activeHabitId) {
-          // If it was running when closed, compute elapsed catch-up time
-          if (parsed.isRunning && parsed.startedAt) {
-            const now = Date.now();
-            const additionalSec = Math.floor((now - parsed.startedAt) / 1000);
-            parsed.elapsedSeconds += additionalSec;
-            parsed.startedAt = now;
-          }
-          setTimerState(parsed);
-        }
-      }
-    } catch (e) {
-      console.error('Failed to load active timer', e);
-    }
-  }, []);
+    habitsRef.current = habits;
+    setLogRef.current = setLog;
+  }, [habits, setLog]);
 
   // Persist timer state to localStorage
   useEffect(() => {
@@ -84,8 +85,8 @@ export function TimerProvider({
       } else {
         localStorage.removeItem(STORAGE_KEY);
       }
-    } catch (e) {
-      console.error('Failed to persist timer', e);
+    } catch {
+      // Ignore storage write issues
     }
   }, [timerState]);
 

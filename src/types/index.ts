@@ -24,6 +24,12 @@ export type HabitUnit =
   | 'reps' 
   | 'percent';
 
+export interface SubTask {
+  id: string;
+  title: string;
+  completed: boolean;
+}
+
 export interface Habit {
   id: string;
   name: string;
@@ -38,6 +44,7 @@ export interface Habit {
   targetDate?: string; // ISO String (YYYY-MM-DD) for one-off habits
   startDate: string; // ISO String (YYYY-MM-DD)
   logs: Record<string, number>; // date string (YYYY-MM-DD) → amount logged
+  subtasks?: SubTask[];
 }
 
 export interface HabitStats {

@@ -41,7 +41,6 @@ export function FloatingTimerWidget({ habits, onOpenInsights }: Props) {
           onClick={() => onOpenInsights(activeHabit.id)}
           className="relative w-10 h-10 rounded-xl flex items-center justify-center text-lg select-none cursor-pointer hover:scale-105 transition shadow-inner"
           style={{ backgroundColor: `${activeHabit.color}25`, border: `1px solid ${activeHabit.color}50` }}
-          title="Click to open Insights & Full Timer"
         >
           {activeHabit.icon}
           {isRunning && (
@@ -81,7 +80,6 @@ export function FloatingTimerWidget({ habits, onOpenInsights }: Props) {
             <button
               onClick={pauseTimer}
               className="w-8 h-8 rounded-lg bg-amber-500/20 hover:bg-amber-500/30 text-amber-400 border border-amber-500/40 flex items-center justify-center transition active:scale-95 shadow-sm"
-              title="Pause Timer"
             >
               <Pause size={14} fill="currentColor" />
             </button>
@@ -89,7 +87,6 @@ export function FloatingTimerWidget({ habits, onOpenInsights }: Props) {
             <button
               onClick={resumeTimer}
               className="w-8 h-8 rounded-lg bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-400 border border-emerald-500/40 flex items-center justify-center transition active:scale-95 shadow-sm"
-              title="Resume Timer"
             >
               <Play size={14} fill="currentColor" />
             </button>
@@ -98,7 +95,6 @@ export function FloatingTimerWidget({ habits, onOpenInsights }: Props) {
           <button
             onClick={stopTimer}
             className="w-8 h-8 rounded-lg bg-gray-900 hover:bg-red-500/20 text-gray-400 hover:text-red-400 border border-gray-700/80 hover:border-red-500/40 flex items-center justify-center transition active:scale-95 shadow-sm"
-            title="Stop & Save Session"
           >
             <Square size={12} fill="currentColor" />
           </button>
@@ -106,7 +102,6 @@ export function FloatingTimerWidget({ habits, onOpenInsights }: Props) {
           <button
             onClick={() => onOpenInsights(activeHabit.id)}
             className="w-8 h-8 rounded-lg bg-gray-900 hover:bg-gray-800 text-gray-400 hover:text-white border border-gray-700/80 flex items-center justify-center transition active:scale-95 shadow-sm"
-            title="Open Insights & Full Timer"
           >
             <ExternalLink size={13} />
           </button>

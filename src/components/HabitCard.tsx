@@ -5,7 +5,7 @@ import { Habit } from '../types';
 import { calculateHabitStats, unitLabel, normalizeDateStr, getAmountInInterval, timeframeSuffix, formatAmount } from '../lib/habitUtils';
 import { useHabitTimer } from '../context/TimerContext';
 import { Plus, Minus, Flame, Check, Play, Pause } from 'lucide-react';
-import { startOfWeek, endOfWeek, addDays, startOfMonth, endOfMonth, isBefore, startOfDay, format } from 'date-fns';
+import { startOfWeek, endOfWeek, addDays, startOfMonth, endOfMonth, isBefore, startOfDay } from 'date-fns';
 
 interface Props {
   habit: Habit;
@@ -83,16 +83,9 @@ export function HabitCard({
     timeframeAmount = getAmountInInterval(habit.logs, monthStart, monthEnd);
   }
 
-  let isComplete = false;
-  if (habit.type === 'START') {
-    if (timeframeAmount >= habit.quota) {
-      isComplete = true;
-    }
-  } else {
-    if (timeframeAmount <= habit.quota) {
-      isComplete = true;
-    }
-  }
+  const isComplete = habit.type === 'START' 
+    ? timeframeAmount >= habit.quota 
+    : timeframeAmount <= habit.quota;
 
   // Compute timeframe chunks to combine cells when goal is complete
   const timeframeChunks = useMemo((): TimeframeChunk[] => {
@@ -175,7 +168,7 @@ export function HabitCard({
     }
   };
 
-  const handleCellKeyDown = (e: React.KeyboardEvent<HTMLInputElement>, dayStr: string) => {
+  const handleCellKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Enter') {
       e.currentTarget.blur();
     } else if (e.key === 'Escape') {
@@ -183,14 +176,7 @@ export function HabitCard({
     }
   };
 
-  const getStep = (quota: number) => {
-    if (quota < 20) return 1;
-    if (quota < 100) return 5;
-    if (quota < 200) return 10;
-    if (quota <= 500) return 20;
-    return 100;
-  };
-  const stepAmount = getStep(habit.quota);
+  const stepAmount = habit.quota < 20 ? 1 : (habit.quota < 100 ? 5 : (habit.quota < 200 ? 10 : (habit.quota <= 500 ? 20 : 100)));
 
   const getQuotaBadgeStyle = () => {
     if (habit.type === 'START') {
@@ -227,7 +213,6 @@ export function HabitCard({
               onClick={onOpenInsights || onEdit}
               className="w-8 h-8 min-w-[32px] min-h-[32px] rounded flex items-center justify-center text-base shrink-0 select-none shadow-inner cursor-pointer hover:scale-105 transition"
               style={{ backgroundColor: `${habit.color}20`, border: `1px solid ${habit.color}40` }}
-              title={`${habit.name} - Click for Insights`}
             >
               {habit.icon}
             </div>
@@ -235,12 +220,11 @@ export function HabitCard({
         ) : (
           <>
             <div className="flex items-center gap-2 min-w-0 flex-1 mr-2">
-              {/* Icon (Click to open Insights) */}
+              {/* Icon */}
               <div
                 onClick={onOpenInsights || onEdit}
                 className="w-8 h-8 min-w-[32px] min-h-[32px] rounded flex items-center justify-center text-base shrink-0 select-none shadow-inner cursor-pointer hover:scale-105 transition"
                 style={{ backgroundColor: `${habit.color}20`, border: `1px solid ${habit.color}40` }}
-                title="Click for Insights & Trends"
               >
                 {habit.icon}
               </div>
@@ -249,12 +233,11 @@ export function HabitCard({
                 <h3 
                   onClick={onOpenInsights || onEdit}
                   className="text-xs sm:text-sm font-semibold text-white hover:text-blue-400 cursor-pointer transition-colors truncate"
-                  title="Click for Insights"
                 >
                   {habit.name}
                 </h3>
                 {isComplete && (
-                  <div className="shrink-0 w-3.5 h-3.5 rounded-full bg-green-500/20 text-green-400 flex items-center justify-center border border-green-500/40" title="Goal Met">
+                  <div className="shrink-0 w-3.5 h-3.5 rounded-full bg-green-500/20 text-green-400 flex items-center justify-center border border-green-500/40">
                     <Check size={9} strokeWidth={3} />
                   </div>
                 )}
@@ -271,7 +254,6 @@ export function HabitCard({
                         ? 'text-emerald-400 bg-emerald-500/20 border-emerald-500/40 animate-pulse hover:bg-emerald-500/30' 
                         : 'text-amber-300 bg-amber-500/20 border-amber-500/40 hover:bg-amber-500/30'
                     }`}
-                    title={isHabitRunningHere ? 'Timer Running (Click to Pause)' : 'Timer Paused (Click to Resume)'}
                   >
                     {isHabitRunningHere ? <Pause size={8} fill="currentColor" /> : <Play size={8} fill="currentColor" />}
                     <span>{formatTime(elapsedSeconds)}</span>
@@ -286,7 +268,6 @@ export function HabitCard({
                       startTimer(habit);
                     }}
                     className="opacity-0 group-hover:opacity-100 text-gray-400 hover:text-emerald-400 p-0.5 rounded hover:bg-gray-800 transition shrink-0"
-                    title="Start Timer"
                   >
                     <Play size={10} fill="currentColor" />
                   </button>
@@ -298,7 +279,6 @@ export function HabitCard({
               <span 
                 onClick={onEdit}
                 className={`border px-2 py-0.5 rounded text-[10px] sm:text-[11px] font-semibold whitespace-nowrap shrink-0 transition-colors cursor-pointer hover:brightness-125 ${getQuotaBadgeStyle()}`}
-                title="Click to edit quota"
               >
                 {quotaBadgeLabel}
               </span>
@@ -307,7 +287,6 @@ export function HabitCard({
                 <span 
                   onClick={onOpenInsights}
                   className="text-[11px] sm:text-xs font-bold text-orange-400 flex items-center gap-0.5 shrink-0 min-w-[32px] justify-end cursor-pointer hover:scale-105 transition" 
-                  title={`Current Streak: ${stats.currentStreak}${timeframeSuffix(habit.timeframe)} (Click for insights)`}
                 >
                   <Flame size={11} className="text-orange-500" />
                   {stats.currentStreak}{timeframeSuffix(habit.timeframe)}
@@ -323,7 +302,7 @@ export function HabitCard({
       {/* Right Heatmap / Interactive Input Cells */}
       <div className="flex-1 flex items-stretch min-w-0">
         {viewMode === 'day' ? (
-          /* Daily View: Horizontal Filling Progress Bar from left to right */
+          /* Daily View: Horizontal Filling Progress Bar */
           (() => {
             const day = weekDays[0];
             const dayStr = normalizeDateStr(day);
@@ -348,7 +327,6 @@ export function HabitCard({
                 textColor = 'text-gray-400 font-bold';
               }
             } else {
-              // STOP habit: reversed color gradient and progress bar
               cellText = `${formatAmount(amount)}/${formatAmount(habit.quota)}`;
               cellBg = habit.color || '#22c55e';
               if (!isFuture) {
@@ -359,11 +337,9 @@ export function HabitCard({
                   progressPercent = Math.max(0, Math.round(((habit.quota - amount) / habit.quota) * 100));
                   textColor = 'text-white font-bold';
                 } else if (amount === habit.quota) {
-                  // At the limit: 0% fill, number remains clearly visible in amber!
                   progressPercent = 0;
                   textColor = 'text-amber-300 font-extrabold';
                 } else {
-                  // Over the limit: 0% fill, number is visible in red!
                   progressPercent = 0;
                   textColor = 'text-red-400 font-extrabold';
                 }
@@ -382,7 +358,6 @@ export function HabitCard({
                 style={{
                   opacity: !isEditing && isFuture ? 0.15 : 1,
                 }}
-                title={isEditing ? '' : `${habit.name} - ${dayStr}: ${formatAmount(amount)}/${formatAmount(habit.quota)} ${habit.unit !== 'amount' ? habit.unit : ''}${isFuture ? ' (Future date)' : ' (Click to input number)'}`}
               >
                 {/* Horizontal Left-to-Right Animated Progress Bar Fill */}
                 {!isEditing && !isFuture && progressPercent > 0 && (
@@ -398,13 +373,12 @@ export function HabitCard({
                   />
                 )}
 
-                {/* Left: Anchored - Button (Disabled for future dates) */}
+                {/* Left: Anchored - Button */}
                 {!isFuture && (
                   <div className="absolute left-3 sm:left-4 flex items-center z-10" onClick={(e) => e.stopPropagation()}>
                     <button
                       onClick={() => onLog(dayStr, Math.max(0, amount - stepAmount))}
                       className="w-7 h-7 flex items-center justify-center rounded-lg bg-gray-950/80 hover:bg-gray-900 text-gray-200 hover:text-white border border-gray-700/80 shadow-md backdrop-blur-sm transition-all active:scale-95 hover:border-gray-500"
-                      title={`Subtract ${stepAmount}`}
                     >
                       <Minus size={13} strokeWidth={2.5} />
                     </button>
@@ -422,7 +396,7 @@ export function HabitCard({
                       value={cellInputValue}
                       onChange={(e) => setCellInputValue(e.target.value)}
                       onBlur={() => handleCellCommit(dayStr)}
-                      onKeyDown={(e) => handleCellKeyDown(e, dayStr)}
+                      onKeyDown={handleCellKeyDown}
                       onFocus={(e) => e.target.select()}
                       placeholder="0"
                       className="w-20 h-8 text-center font-extrabold text-sm bg-gray-900 text-white rounded border-2 border-blue-500 shadow-xl focus:outline-none no-spinners px-1"
@@ -446,7 +420,6 @@ export function HabitCard({
                             ? 'bg-emerald-500/20 text-emerald-400 hover:bg-emerald-500/30'
                             : 'bg-gray-900/80 text-gray-400 hover:text-white border border-gray-700/70'
                         }`}
-                        title={isHabitRunningHere ? 'Pause Timer' : 'Start Timer'}
                       >
                         {isHabitRunningHere ? <Pause size={10} fill="currentColor" /> : <Play size={10} fill="currentColor" />}
                       </button>
@@ -454,13 +427,12 @@ export function HabitCard({
                   </div>
                 )}
 
-                {/* Right: Anchored + Button (Disabled for future dates) */}
+                {/* Right: Anchored + Button */}
                 {!isFuture && (
                   <div className="absolute right-3 sm:right-4 flex items-center z-10" onClick={(e) => e.stopPropagation()}>
                     <button
                       onClick={() => onLog(dayStr, amount + stepAmount)}
                       className="w-7 h-7 flex items-center justify-center rounded-lg bg-gray-950/80 hover:bg-gray-900 text-gray-200 hover:text-white border border-gray-700/80 shadow-md backdrop-blur-sm transition-all active:scale-95 hover:border-gray-500"
-                      title={`Add ${stepAmount}`}
                     >
                       <Plus size={13} strokeWidth={2.5} />
                     </button>
@@ -479,7 +451,6 @@ export function HabitCard({
             const renderDayCell = (day: Date) => {
               const dayStr = normalizeDateStr(day);
               const amount = habit.logs[dayStr] || 0;
-              const isSelected = dayStr === selectedDateStr;
               const isFuture = isBefore(todayStart, startOfDay(day));
               const isEditing = editingDayStr === dayStr;
 
@@ -501,7 +472,6 @@ export function HabitCard({
                   fillOpacity = 0;
                 }
               } else {
-                // STOP habit: reversed color gradient (100% at 0, 50% at 1/2, 0% when over limit)
                 cellText = formatAmount(amount);
                 cellBg = habit.color || '#22c55e';
                 if (!isFuture) {
@@ -512,11 +482,9 @@ export function HabitCard({
                     fillOpacity = (habit.quota - amount) / habit.quota;
                     textColor = 'text-white font-bold';
                   } else if (amount === habit.quota) {
-                    // At the limit: 0% fill, number remains clearly visible in amber!
                     fillOpacity = 0;
                     textColor = 'text-amber-300 font-extrabold';
                   } else {
-                    // Over the limit: 0% fill, number is visible in red!
                     fillOpacity = 0;
                     textColor = 'text-red-400 font-extrabold';
                   }
@@ -542,7 +510,6 @@ export function HabitCard({
                   style={{
                     opacity: !isEditing && isFuture ? 0.15 : 1,
                   }}
-                  title={isEditing ? '' : isYearView ? `${format(day, 'EEEE, MMMM d, yyyy')} - ${habit.name}: ${formatAmount(amount)} ${habit.unit !== 'amount' ? habit.unit : ''} (Click to open Daily View)` : `${habit.name} - ${dayStr}: ${formatAmount(amount)} ${habit.unit !== 'amount' ? habit.unit : ''}${isFuture ? ' (Future date)' : ' (Click to input number)'}`}
                 >
                   {/* Background fill layer */}
                   {!isEditing && !isFuture && fillOpacity > 0 && (
@@ -566,7 +533,7 @@ export function HabitCard({
                         value={cellInputValue}
                         onChange={(e) => setCellInputValue(e.target.value)}
                         onBlur={() => handleCellCommit(dayStr)}
-                        onKeyDown={(e) => handleCellKeyDown(e, dayStr)}
+                        onKeyDown={handleCellKeyDown}
                         onFocus={(e) => e.target.select()}
                         placeholder="0"
                         className={`font-bold text-center text-white rounded bg-gray-900 border-2 border-blue-500 shadow-xl focus:outline-none no-spinners ${
@@ -575,29 +542,12 @@ export function HabitCard({
                       />
                     </div>
                   ) : (
-                    <>
-                      {/* Numbers are completely OFF in yearly view, and controlled by showNumbers in other views */}
-                      {!isYearView && showNumbers && (
-                        <span className={`text-[10px] sm:text-xs z-10 select-none transition-all ${textColor}`}>
-                          {cellText}
-                        </span>
-                      )}
-
-                      {/* Hover tooltip for quick preview */}
-                      <div className="pointer-events-none absolute bottom-full mb-1 opacity-0 group-hover/cell:opacity-100 transition-opacity bg-gray-950 text-white text-[10px] py-0.5 px-2 rounded border border-gray-700 shadow-2xl whitespace-nowrap z-30">
-                        {isYearView ? (
-                          <span className="flex items-center gap-1.5 font-medium">
-                            <span className="font-semibold text-gray-300">{format(day, 'EEE, MMM d, yyyy')}</span>
-                            <span className="text-gray-500">•</span>
-                            <span className={amount > 0 ? 'text-blue-400 font-bold' : 'text-gray-400'}>
-                              {amount > 0 ? `${formatAmount(amount)} ${unitLabel(habit.unit)}` : (isFuture ? 'Future date' : '0')}
-                            </span>
-                          </span>
-                        ) : (
-                          amount > 0 ? `${formatAmount(amount)} ${unitLabel(habit.unit)}` : (isFuture ? 'Future date' : 'Click to input number')
-                        )}
-                      </div>
-                    </>
+                    /* Numbers are completely OFF in yearly view, and controlled by showNumbers in other views */
+                    !isYearView && showNumbers && (
+                      <span className={`text-[10px] sm:text-xs z-10 select-none transition-all ${textColor}`}>
+                        {cellText}
+                      </span>
+                    )
                   )}
                 </div>
               );
@@ -617,7 +567,7 @@ export function HabitCard({
                   className="relative group/chunk flex items-stretch h-full min-w-0"
                   style={{ flex: `${chunk.days.length} 0 0%` }}
                 >
-                  {/* Combined Color Bar: Suffix text only when showNumbers is ON and not year view */}
+                  {/* Combined Color Bar */}
                   {!hasEditingCell && (
                     <div
                       className={`absolute inset-0 flex items-center justify-center group-hover/chunk:hidden z-10 transition-all cursor-pointer shadow-inner ${
@@ -628,7 +578,6 @@ export function HabitCard({
                         opacity: chunkOpacity,
                         color: '#ffffff'
                       }}
-                      title={`${habit.name} - ${habit.type === 'START' ? 'Goal Complete!' : 'Within Allowance!'} Hover to see individual days`}
                     >
                       {!isYearView && showNumbers && (
                         <div className="flex items-center justify-center font-extrabold text-xs tracking-wide px-1.5 drop-shadow truncate">
@@ -642,7 +591,7 @@ export function HabitCard({
                     </div>
                   )}
 
-                  {/* Individual Day Cells (Revealed on hover or when editing) */}
+                  {/* Individual Day Cells */}
                   <div className="flex-1 flex items-stretch min-w-0 h-full">
                     {chunk.days.map((d) => renderDayCell(d))}
                   </div>

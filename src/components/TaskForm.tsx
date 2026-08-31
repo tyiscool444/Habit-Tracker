@@ -1,10 +1,11 @@
 'use client';
 
 import { useState, useMemo } from 'react';
-import { Habit, HabitType, HabitUnit } from '../types';
-import { X, Trash2, Calendar, Tag, Shuffle } from 'lucide-react';
+import { Habit, HabitType, HabitUnit, SubTask } from '../types';
+import { X, Trash2, Calendar, Tag, Shuffle, Plus, ListTodo, Check } from 'lucide-react';
 import { ICONS, COLORS, UNITS, getRandomIcon, getRandomColor } from '../lib/constants';
 import { format, addDays, endOfMonth } from 'date-fns';
+import { normalizeDateStr } from '../lib/habitUtils';
 
 interface Props {
   initialTask?: Habit;
@@ -15,7 +16,7 @@ interface Props {
 }
 
 export function TaskForm({ initialTask, existingGroups = [], onSave, onCancel, onDelete }: Props) {
-  const todayStr = new Date().toISOString().split('T')[0];
+  const todayStr = normalizeDateStr(new Date());
   const [name, setName] = useState(initialTask?.name || '');
   const [icon, setIcon] = useState(() => initialTask?.icon || getRandomIcon());
   const [color, setColor] = useState(() => initialTask?.color || getRandomColor());
@@ -23,7 +24,14 @@ export function TaskForm({ initialTask, existingGroups = [], onSave, onCancel, o
   const [type, setType] = useState<HabitType>(initialTask?.type || 'START');
   const [unit, setUnit] = useState<HabitUnit>(initialTask?.unit || 'amount');
   const [quota, setQuota] = useState(initialTask?.quota || 1);
-  const [targetDate, setTargetDate] = useState<string>(initialTask?.targetDate || initialTask?.startDate || todayStr);
+  const [targetDate, setTargetDate] = useState<string>(() =>
+    initialTask?.targetDate ? normalizeDateStr(initialTask.targetDate) :
+    initialTask?.startDate ? normalizeDateStr(initialTask.startDate) : todayStr
+  );
+
+  // Subtasks state
+  const [subtasks, setSubtasks] = useState<SubTask[]>(initialTask?.subtasks || []);
+  const [newSubtaskTitle, setNewSubtaskTitle] = useState('');
 
   // Popover Drawer states
   const [activePicker, setActivePicker] = useState<'icon' | 'color' | null>(null);
@@ -32,10 +40,30 @@ export function TaskForm({ initialTask, existingGroups = [], onSave, onCancel, o
     return Array.from(new Set((existingGroups || []).filter(g => Boolean(g && g.trim()))));
   }, [existingGroups]);
 
+  const addSubtask = () => {
+    if (!newSubtaskTitle.trim()) return;
+    const newSub: SubTask = {
+      id: Math.random().toString(36).substring(2, 9),
+      title: newSubtaskTitle.trim(),
+      completed: false,
+    };
+    setSubtasks(prev => [...prev, newSub]);
+    setNewSubtaskTitle('');
+  };
+
+  const toggleSubtask = (id: string) => {
+    setSubtasks(prev => prev.map(s => s.id === id ? { ...s, completed: !s.completed } : s));
+  };
+
+  const removeSubtask = (id: string) => {
+    setSubtasks(prev => prev.filter(s => s.id !== id));
+  };
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!name.trim()) return;
 
+    const normalizedTarget = normalizeDateStr(targetDate || todayStr);
     const taskToSave: Habit = {
       id: initialTask?.id || Math.random().toString(36).substr(2, 9),
       name: name.trim(),
@@ -47,14 +75,13 @@ export function TaskForm({ initialTask, existingGroups = [], onSave, onCancel, o
       quota: quota || 1,
       timeframe: 'daily',
       isRecurring: false,
-      targetDate: targetDate || todayStr,
-      startDate: targetDate || todayStr,
+      targetDate: normalizedTarget,
+      startDate: normalizedTarget,
       logs: initialTask?.logs || {},
+      subtasks: subtasks.length > 0 ? subtasks : undefined,
     };
     onSave(taskToSave);
   };
-
-  const isStop = type === 'STOP';
 
   const setDatePreset = (preset: 'today' | 'tomorrow' | '3days' | 'nextWeek' | 'endOfMonth') => {
     const now = new Date();
@@ -103,7 +130,6 @@ export function TaskForm({ initialTask, existingGroups = [], onSave, onCancel, o
                 setColor(getRandomColor());
               }}
               className="text-[11px] font-medium text-gray-400 hover:text-purple-400 flex items-center gap-1 transition-colors px-1.5 py-0.5 rounded-md hover:bg-gray-800/80 active:scale-95"
-              title="Randomize emoji and color"
             >
               <Shuffle size={11} />
               <span>Randomize</span>
@@ -115,7 +141,6 @@ export function TaskForm({ initialTask, existingGroups = [], onSave, onCancel, o
               type="button"
               onClick={() => setActivePicker(activePicker === 'icon' ? null : 'icon')}
               className="w-9 h-9 rounded-lg flex items-center justify-center text-xl bg-gray-800 hover:bg-gray-700 border border-gray-700/70 transition shrink-0 active:scale-95"
-              title="Click to choose icon"
             >
               {icon}
             </button>
@@ -125,7 +150,6 @@ export function TaskForm({ initialTask, existingGroups = [], onSave, onCancel, o
               type="button"
               onClick={() => setActivePicker(activePicker === 'color' ? null : 'color')}
               className="w-9 h-9 rounded-lg flex items-center justify-center bg-gray-800 hover:bg-gray-700 border border-gray-700/70 transition shrink-0 active:scale-95 group/col"
-              title="Click to choose accent color"
             >
               <div 
                 className="w-4 h-4 rounded-full border-2 border-white/40 shadow-sm group-hover/col:scale-110 transition"
@@ -308,17 +332,19 @@ export function TaskForm({ initialTask, existingGroups = [], onSave, onCancel, o
 
           {/* Quick Date Presets */}
           <div className="flex gap-1.5 flex-wrap mt-2">
-            {[
-              { id: 'today', label: 'Today' },
-              { id: 'tomorrow', label: 'Tomorrow' },
-              { id: '3days', label: 'In 3 Days' },
-              { id: 'nextWeek', label: 'In 1 Week' },
-              { id: 'endOfMonth', label: 'End of Month' }
-            ].map(p => (
+            {(
+              [
+                { id: 'today', label: 'Today' },
+                { id: 'tomorrow', label: 'Tomorrow' },
+                { id: '3days', label: 'In 3 Days' },
+                { id: 'nextWeek', label: 'In 1 Week' },
+                { id: 'endOfMonth', label: 'End of Month' },
+              ] as const
+            ).map(p => (
               <button
                 key={p.id}
                 type="button"
-                onClick={() => setDatePreset(p.id as any)}
+                onClick={() => setDatePreset(p.id)}
                 className="px-2 py-0.5 rounded-lg text-[10px] font-semibold bg-gray-800/60 hover:bg-gray-700 text-gray-400 hover:text-white border border-gray-700/40 transition"
               >
                 {p.label}
@@ -392,6 +418,88 @@ export function TaskForm({ initialTask, existingGroups = [], onSave, onCancel, o
               </div>
             </div>
           </div>
+        </div>
+
+        {/* Subtasks Management Section */}
+        <div className="space-y-2 pt-1 border-t border-gray-800/60">
+          <div className="flex items-center justify-between">
+            <label className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider text-gray-400">
+              <ListTodo size={13} className="text-purple-400" />
+              <span>Subtasks</span>
+              {subtasks.length > 0 && (
+                <span className="text-[10px] text-purple-300 font-semibold bg-purple-500/10 px-1.5 py-0.2 rounded border border-purple-500/20">
+                  {subtasks.filter(s => s.completed).length}/{subtasks.length}
+                </span>
+              )}
+            </label>
+          </div>
+
+          {/* New Subtask Input Row */}
+          <div className="flex gap-2">
+            <input
+              type="text"
+              value={newSubtaskTitle}
+              onChange={(e) => setNewSubtaskTitle(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  e.preventDefault();
+                  addSubtask();
+                }
+              }}
+              placeholder="Add a subtask step..."
+              className="flex-1 bg-[#171922] border border-gray-700/80 rounded-xl px-3 py-1.5 text-xs text-white placeholder-gray-500 focus:outline-none focus:border-purple-500 transition"
+            />
+            <button
+              type="button"
+              onClick={addSubtask}
+              disabled={!newSubtaskTitle.trim()}
+              className="px-3 py-1.5 rounded-xl text-xs font-semibold bg-purple-600/20 hover:bg-purple-600 text-purple-300 hover:text-white border border-purple-500/30 disabled:opacity-40 disabled:cursor-not-allowed transition flex items-center gap-1"
+            >
+              <Plus size={13} />
+              <span>Add</span>
+            </button>
+          </div>
+
+          {/* Existing Subtasks List */}
+          {subtasks.length > 0 && (
+            <div className="space-y-1.5 max-h-36 overflow-y-auto pr-1">
+              {subtasks.map((st) => (
+                <div
+                  key={st.id}
+                  className="flex items-center justify-between gap-2 p-2 rounded-xl bg-[#141620] border border-gray-800/80 group/sub"
+                >
+                  <div
+                    onClick={() => toggleSubtask(st.id)}
+                    className="flex items-center gap-2 flex-1 min-w-0 cursor-pointer select-none"
+                  >
+                    <div
+                      className={`w-4 h-4 rounded flex items-center justify-center border transition shrink-0 ${
+                        st.completed
+                          ? 'bg-purple-600 border-purple-500 text-white'
+                          : 'border-gray-600 bg-gray-900/60 text-transparent'
+                      }`}
+                    >
+                      <Check size={10} strokeWidth={3} className={st.completed ? 'opacity-100' : 'opacity-0'} />
+                    </div>
+                    <span
+                      className={`text-xs truncate transition ${
+                        st.completed ? 'text-gray-500 line-through' : 'text-gray-200'
+                      }`}
+                    >
+                      {st.title}
+                    </span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => removeSubtask(st.id)}
+                    className="p-1 text-gray-500 hover:text-red-400 rounded transition opacity-60 group-hover/sub:opacity-100"
+                  >
+                    <Trash2 size={12} />
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
 
         {/* Bottom Actions Bar */}
