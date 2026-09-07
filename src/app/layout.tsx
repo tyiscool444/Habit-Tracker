@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 
@@ -12,14 +12,33 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
+export const viewport: Viewport = {
+  themeColor: "#07080a",
+  width: "device-width",
+  initialScale: 1,
+  maximumScale: 5,
+  colorScheme: "dark",
+};
+
 export const metadata: Metadata = {
-  title: "HabitThat — Modern Habit & Task Tracker",
-  description: "Track your habits, build streaks, and achieve daily & long-term goals with an Excel-style interactive grid.",
+  title: "HabitThat — Modern Habit & Goal Tracker",
+  description: "Track your habits, build lasting streaks, and achieve daily & long-term goals with an interactive heatmap grid, live stopwatch, and cloud backup sync.",
   manifest: "/manifest.json",
+  icons: {
+    icon: "/app-icon.ico",
+    shortcut: "/app-icon.ico",
+    apple: "/app-icon.ico",
+  },
   appleWebApp: {
     capable: true,
     statusBarStyle: "black-translucent",
     title: "HabitThat",
+  },
+  openGraph: {
+    title: "HabitThat — Modern Habit & Goal Tracker",
+    description: "Track your habits, build lasting streaks, and achieve daily & long-term goals with an interactive heatmap grid and live stopwatch.",
+    type: "website",
+    siteName: "HabitThat",
   },
 };
 
@@ -33,7 +52,7 @@ export default function RootLayout({
       lang="en"
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
-      <body className="min-h-full flex flex-col">{children}</body>
+      <body className="min-h-full flex flex-col bg-[#07080a] text-slate-100">{children}</body>
     </html>
   );
 }

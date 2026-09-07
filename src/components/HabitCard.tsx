@@ -448,6 +448,9 @@ export function HabitCard({
             const isSingle = chunk.days.length === 1;
             const isYearView = viewMode === 'year';
 
+            const isDaily = habit.timeframe === 'daily';
+            const effectiveShowBorders = showBorders && !isYearView;
+
             const renderDayCell = (day: Date) => {
               const dayStr = normalizeDateStr(day);
               const amount = habit.logs[dayStr] || 0;
@@ -494,7 +497,8 @@ export function HabitCard({
                 }
               }
 
-              const effectiveShowBorders = showBorders && !isYearView;
+              const showDayCellNumber = !isYearView && showNumbers && (!isCellGrouping || isDaily);
+              const showDayCellBg = !isEditing && !isFuture && fillOpacity > 0 && (!isCellGrouping || isDaily);
 
               return (
                 <div
@@ -511,8 +515,8 @@ export function HabitCard({
                     opacity: !isEditing && isFuture ? 0.15 : 1,
                   }}
                 >
-                  {/* Background fill layer */}
-                  {!isEditing && !isFuture && fillOpacity > 0 && (
+                  {/* Background fill layer (only for daily habits or when cell grouping is OFF) */}
+                  {showDayCellBg && (
                     <div 
                       className="absolute inset-0 pointer-events-none transition-all"
                       style={{
@@ -542,8 +546,8 @@ export function HabitCard({
                       />
                     </div>
                   ) : (
-                    /* Numbers are completely OFF in yearly view, and controlled by showNumbers in other views */
-                    !isYearView && showNumbers && (
+                    /* Individual cell numbers shown ONLY for daily habits or when cell grouping is OFF */
+                    showDayCellNumber && (
                       <span className={`text-[10px] sm:text-xs z-10 select-none transition-all ${textColor}`}>
                         {cellText}
                       </span>
@@ -553,13 +557,38 @@ export function HabitCard({
               );
             };
 
-            // If cell grouping is enabled, and this timeframe chunk is complete and has multiple days:
-            if (isCellGrouping && chunk.isComplete && !isSingle) {
+            // If cell grouping is enabled and this chunk has multiple days and is non-daily:
+            const shouldGroup = isCellGrouping && !isDaily && !isSingle;
+
+            if (shouldGroup) {
               const fullColor = habit.color || (habit.type === 'START' ? '#3b82f6' : '#22c55e');
-              const chunkOpacity = habit.type === 'START' 
-                ? 1 
-                : (habit.quota > 0 ? Math.max(0, Math.min((habit.quota - chunk.amount) / habit.quota, 1)) : 1);
-              const effectiveShowBorders = showBorders && !isYearView;
+              let chunkOpacity = 0;
+              let labelColor = 'text-white font-bold';
+
+              if (habit.type === 'START') {
+                if (chunk.amount >= habit.quota) {
+                  chunkOpacity = 1;
+                  labelColor = 'text-white font-extrabold';
+                } else if (chunk.amount > 0) {
+                  chunkOpacity = Math.max(0.35, Math.min(chunk.amount / habit.quota, 1));
+                  labelColor = 'text-white font-bold';
+                } else {
+                  chunkOpacity = 0;
+                  labelColor = 'text-gray-400 font-semibold';
+                }
+              } else {
+                // QUIT habit
+                if (chunk.amount === 0) {
+                  chunkOpacity = 1;
+                  labelColor = 'text-white font-extrabold';
+                } else if (chunk.amount <= habit.quota) {
+                  chunkOpacity = Math.max(0.35, (habit.quota - chunk.amount) / habit.quota);
+                  labelColor = 'text-white font-bold';
+                } else {
+                  chunkOpacity = 0;
+                  labelColor = 'text-red-400 font-bold';
+                }
+              }
 
               return (
                 <div
@@ -567,39 +596,39 @@ export function HabitCard({
                   className="relative group/chunk flex items-stretch h-full min-w-0"
                   style={{ flex: `${chunk.days.length} 0 0%` }}
                 >
-                  {/* Combined Color Bar */}
-                  {!hasEditingCell && (
+                  {/* Combined Color Bar Background */}
+                  {!hasEditingCell && chunkOpacity > 0 && (
                     <div
-                      className={`absolute inset-0 flex items-center justify-center group-hover/chunk:hidden z-10 transition-all cursor-pointer shadow-inner ${
-                        effectiveShowBorders ? 'border-r border-gray-800/80' : ''
-                      }`}
+                      className="absolute inset-0 pointer-events-none transition-all shadow-inner"
                       style={{
                         backgroundColor: fullColor,
                         opacity: chunkOpacity,
-                        color: '#ffffff'
                       }}
-                    >
-                      {!isYearView && showNumbers && (
-                        <div className="flex items-center justify-center font-extrabold text-xs tracking-wide px-1.5 drop-shadow truncate">
-                          <span className="truncate">
-                            {viewMode === 'month' && habit.timeframe === 'weekly' 
-                              ? `${formatAmount(chunk.amount)}/${formatAmount(habit.quota)}` 
-                              : `${formatAmount(chunk.amount)}/${formatAmount(habit.quota)} ${unitLabel(habit.unit)}`}
-                          </span>
-                        </div>
-                      )}
+                    />
+                  )}
+
+                  {/* Combined Progress Label for timeframe period */}
+                  {!hasEditingCell && !isYearView && showNumbers && (
+                    <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-10 transition-all px-1.5">
+                      <div className={`flex items-center justify-center text-xs tracking-wide drop-shadow truncate ${labelColor}`}>
+                        <span className="truncate">
+                          {viewMode === 'month' && habit.timeframe === 'weekly' 
+                            ? `${formatAmount(chunk.amount)}/${formatAmount(habit.quota)}` 
+                            : `${formatAmount(chunk.amount)}/${formatAmount(habit.quota)} ${unitLabel(habit.unit)}`}
+                        </span>
+                      </div>
                     </div>
                   )}
 
-                  {/* Individual Day Cells */}
-                  <div className="flex-1 flex items-stretch min-w-0 h-full">
+                  {/* Underlying Day Cells for interaction */}
+                  <div className="flex-1 flex items-stretch min-w-0 h-full relative z-0">
                     {chunk.days.map((d) => renderDayCell(d))}
                   </div>
                 </div>
               );
             }
 
-            // Normal chunk (single day, incomplete, or grouping disabled)
+            // Normal chunk (single day, daily habit, or grouping disabled)
             return (
               <div 
                 key={`chunk-${chunkIdx}`}

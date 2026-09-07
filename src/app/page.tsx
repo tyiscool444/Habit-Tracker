@@ -8,12 +8,14 @@ import { HabitCard } from '../components/HabitCard';
 import { OneOffTaskCard } from '../components/OneOffTaskCard';
 import { HabitInsightsModal } from '../components/HabitInsightsModal';
 import { FloatingTimerWidget } from '../components/FloatingTimerWidget';
+import { DataSyncModal } from '../components/DataSyncModal';
 import { TimerProvider } from '../context/TimerContext';
 import {
   PlusCircle, ChevronLeft, ChevronRight, Hash, Layers, Grid,
-  Target, Trash2, Search, Filter, X, Tag
+  Target, Trash2, Search, Filter, X, Tag, Database, Sparkles, Plus
 } from 'lucide-react';
 import { normalizeDateStr, getAmountInInterval } from '../lib/habitUtils';
+import { getSampleHabits } from '../lib/sampleHabits';
 import {
   addDays, isSameDay, format, getDaysInMonth, startOfMonth, endOfMonth,
   addMonths, startOfWeek, endOfWeek, startOfYear, endOfYear, addYears,
@@ -91,8 +93,11 @@ function sortTasksByUpcoming(tasks: Habit[]) {
 }
 
 export default function Home() {
-  const { habits, addHabit, updateHabit, deleteHabit, deleteHabits, setLog, isLoaded } = useHabits();
+  const { habits, addHabit, updateHabit, deleteHabit, deleteHabits, setLog, setAllHabits, clearAllHabits, isLoaded } = useHabits();
   
+  // Data / Sync Backup Modal State
+  const [showDataModal, setShowDataModal] = useState(false);
+
   // Recurring Habit Modal States
   const [showHabitForm, setShowHabitForm] = useState(false);
   const [editingHabitId, setEditingHabitId] = useState<string | null>(null);
@@ -377,6 +382,36 @@ export default function Home() {
               Habit<span className="text-blue-500">That</span>
             </h1>
           </div>
+
+          <div className="flex items-center gap-2.5 flex-wrap">
+            <button
+              type="button"
+              onClick={() => setShowDataModal(true)}
+              className="px-3.5 py-2 rounded-xl bg-[#12141c] hover:bg-[#1a1e29] border border-gray-700/70 hover:border-gray-600 text-gray-300 hover:text-white text-xs font-bold transition flex items-center gap-2 shadow-sm active:scale-95"
+              title="Export, Import, Backup or Load Templates"
+            >
+              <Database size={14} className="text-blue-400" />
+              <span>Data & Backup</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setShowHabitForm(true)}
+              className="px-3.5 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold transition flex items-center gap-1.5 shadow-lg shadow-blue-500/25 active:scale-95"
+            >
+              <Plus size={14} />
+              <span>New Habit</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setShowTaskForm(true)}
+              className="px-3.5 py-2 rounded-xl bg-purple-600 hover:bg-purple-500 text-white text-xs font-bold transition flex items-center gap-1.5 shadow-lg shadow-purple-500/25 active:scale-95"
+            >
+              <Plus size={14} />
+              <span>New Task</span>
+            </button>
+          </div>
         </header>
 
         {/* Completion Metrics: Daily, Weekly, Monthly */}
@@ -575,6 +610,20 @@ export default function Home() {
             )}
           </div>
         )}
+
+        {/* Modal: Data & Backup Sync */}
+        <Modal isOpen={showDataModal} onClose={() => setShowDataModal(false)} maxWidth="max-w-xl">
+          <DataSyncModal
+            habits={habits}
+            onSetAllHabits={(newHabits) => {
+              setAllHabits(newHabits);
+            }}
+            onClearAll={() => {
+              clearAllHabits();
+            }}
+            onClose={() => setShowDataModal(false)}
+          />
+        </Modal>
 
         {/* Modal: Add Recurring Habit */}
         <Modal isOpen={showHabitForm} onClose={() => setShowHabitForm(false)}>
@@ -938,15 +987,42 @@ export default function Home() {
             </div>
           </div>
         ) : (
-          <div className="bg-[#090a0d] border border-gray-800 rounded-xl p-8 text-center text-gray-500 shadow-xl">
-            <p className="text-sm">No recurring habits added yet.</p>
-            <button
-              onClick={() => setShowHabitForm(true)}
-              className="mt-3 inline-flex items-center gap-1.5 text-xs font-bold text-blue-400 hover:text-blue-300 bg-blue-500/10 px-3 py-1.5 rounded-lg border border-blue-500/20 transition"
-            >
-              <PlusCircle size={14} />
-              <span>Create Recurring Habit</span>
-            </button>
+          <div className="bg-[#090a0d] border border-gray-800 rounded-2xl p-8 sm:p-10 text-center shadow-xl space-y-4">
+            <div className="w-12 h-12 rounded-2xl bg-blue-500/10 border border-blue-500/30 text-blue-400 mx-auto flex items-center justify-center text-xl">
+              ✨
+            </div>
+            <div>
+              <h3 className="text-base font-bold text-white">No recurring habits yet</h3>
+              <p className="text-xs text-gray-400 max-w-md mx-auto mt-1">
+                Start tracking daily, weekly, or monthly habits, build streaks, or load sample templates to test the app.
+              </p>
+            </div>
+            <div className="flex items-center justify-center gap-3 flex-wrap pt-2">
+              <button
+                type="button"
+                onClick={() => setShowHabitForm(true)}
+                className="inline-flex items-center gap-1.5 text-xs font-bold text-white bg-blue-600 hover:bg-blue-500 px-4 py-2 rounded-xl shadow-lg shadow-blue-500/20 transition active:scale-95"
+              >
+                <PlusCircle size={14} />
+                <span>Create Habit</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setAllHabits(getSampleHabits())}
+                className="inline-flex items-center gap-1.5 text-xs font-bold text-amber-300 hover:text-amber-200 bg-amber-500/15 border border-amber-500/30 px-4 py-2 rounded-xl transition active:scale-95"
+              >
+                <Sparkles size={14} />
+                <span>Load Starter Preset</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setShowDataModal(true)}
+                className="inline-flex items-center gap-1.5 text-xs font-bold text-gray-300 hover:text-white bg-gray-900 hover:bg-gray-800 border border-gray-700/80 px-4 py-2 rounded-xl transition active:scale-95"
+              >
+                <Database size={14} />
+                <span>Import Backup</span>
+              </button>
+            </div>
           </div>
         )}
 

@@ -3,33 +3,53 @@ $appDir = $PSScriptRoot
 Set-Location $appDir
 
 $logFile = Join-Path $appDir "launcher.log"
-"Launcher started at $(Get-Date)" | Out-File $logFile -Encoding utf8
+
+"=================================================" | Out-File $logFile -Encoding utf8
+"Launcher started at $(Get-Date)" | Out-File $logFile -Append -Encoding utf8
 
 $url = "http://localhost:3000"
 
-# 1. Test if HabitThat server is already running and responding
-$serverReady = $false
-try {
-    $res = Invoke-WebRequest -Uri $url -UseBasicParsing -TimeoutSec 2 -ErrorAction SilentlyContinue
-    if ($res.StatusCode -eq 200) {
-        $serverReady = $true
-        "Server already running." | Out-File $logFile -Append -Encoding utf8
+function Test-ServerHealthy {
+    try {
+        $res = Invoke-WebRequest -Uri "http://127.0.0.1:3000" -UseBasicParsing -TimeoutSec 2 -ErrorAction Stop
+        return ($res.StatusCode -eq 200)
+    } catch {
+        return $false
     }
-} catch {}
+}
 
-# 2. If not running, find Node & start Next.js dev server in background
-if (-not $serverReady) {
-    "Server not running, attempting startup..." | Out-File $logFile -Append -Encoding utf8
+# 1. Check if server is already running and healthy
+$serverReady = Test-ServerHealthy
+
+if ($serverReady) {
+    "Server is already running and healthy." | Out-File $logFile -Append -Encoding utf8
+} else {
+    "Server not responding. Cleaning port 3000 and starting background process..." | Out-File $logFile -Append -Encoding utf8
     
-    # Check and clean any zombie process blocking port 3000
-    $portLine = netstat -ano | Select-String ":3000\s+LISTENING"
-    if ($portLine) {
-        $zombiePid = ($portLine -split '\s+')[-1]
-        if ($zombiePid -match '^\d+$') {
-            Stop-Process -Id $zombiePid -Force -ErrorAction SilentlyContinue
-            "Killed zombie PID $zombiePid" | Out-File $logFile -Append -Encoding utf8
+    # Terminate any dead or listening process on port 3000
+    try {
+        $listeningPids = (Get-NetTCPConnection -LocalPort 3000 -State Listen -ErrorAction SilentlyContinue).OwningProcess | Select-Object -Unique
+        foreach ($pidToKill in $listeningPids) {
+            if ($pidToKill -and $pidToKill -gt 0) {
+                Stop-Process -Id $pidToKill -Force -ErrorAction SilentlyContinue
+                "Killed TCP listening PID $pidToKill" | Out-File $logFile -Append -Encoding utf8
+            }
         }
-    }
+    } catch {}
+
+    try {
+        $netstatLines = netstat -ano | Select-String ":3000\s+"
+        foreach ($line in $netstatLines) {
+            $parts = ($line.ToString().Trim() -split '\s+')
+            $p = $parts[-1]
+            if ($p -match '^\d+$' -and [int]$p -gt 0) {
+                Stop-Process -Id ([int]$p) -Force -ErrorAction SilentlyContinue
+                "Killed netstat PID $p" | Out-File $logFile -Append -Encoding utf8
+            }
+        }
+    } catch {}
+
+    Start-Sleep -Milliseconds 400
 
     # Locate node.exe
     $nodeExe = "C:\nvm4w\nodejs\node.exe"
@@ -37,55 +57,64 @@ if (-not $serverReady) {
         $cmdNode = (Get-Command "node" -ErrorAction SilentlyContinue).Source
         if ($cmdNode) { $nodeExe = $cmdNode }
     }
-    "Node: $nodeExe" | Out-File $logFile -Append -Encoding utf8
+    if (-not (Test-Path $nodeExe)) {
+        $whereNode = (where.exe node 2>$null | Select-Object -First 1)
+        if ($whereNode) { $nodeExe = $whereNode }
+    }
+    "Node binary: $nodeExe" | Out-File $logFile -Append -Encoding utf8
 
     $nextCli = Join-Path $appDir "node_modules\next\dist\bin\next"
     "Next CLI: $nextCli" | Out-File $logFile -Append -Encoding utf8
 
+    # Start fully detached background process using WMI Win32_Process
     if ((Test-Path $nodeExe) -and (Test-Path $nextCli)) {
-        $wsh = New-Object -ComObject WScript.Shell
-        $wsh.CurrentDirectory = $appDir
-        $wsh.Run("`"$nodeExe`" `"$nextCli`" dev -p 3000", 0, $false)
-        "Spawned detached Node Next.js process" | Out-File $logFile -Append -Encoding utf8
+        $cmdLine = "`"$nodeExe`" `"$nextCli`" dev -p 3000 -H 127.0.0.1"
+        $wmiRes = ([wmiclass]"Win32_Process").Create($cmdLine, $appDir, $null)
+        "Spawned WMI detached Node process (PID: $($wmiRes.ProcessId), Return: $($wmiRes.ReturnValue))" | Out-File $logFile -Append -Encoding utf8
     } else {
-        "Fallback to npm.cmd" | Out-File $logFile -Append -Encoding utf8
-        $wsh = New-Object -ComObject WScript.Shell
-        $wsh.CurrentDirectory = $appDir
-        $wsh.Run("npm.cmd run dev", 0, $false)
+        "Fallback: using npm.cmd run dev" | Out-File $logFile -Append -Encoding utf8
+        $cmdLine = "npm.cmd run dev -- -H 127.0.0.1"
+        $wmiRes = ([wmiclass]"Win32_Process").Create($cmdLine, $appDir, $null)
     }
 
-    # 3. Wait until server responds with HTTP 200 (max 20 seconds)
-    $maxAttempts = 40
-    for ($i = 0; $i -lt $maxAttempts; $i++) {
-        Start-Sleep -Milliseconds 500
-        try {
-            $res = Invoke-WebRequest -Uri $url -UseBasicParsing -TimeoutSec 2 -ErrorAction SilentlyContinue
-            if ($res.StatusCode -eq 200) {
-                $serverReady = $true
-                "Server responded 200 OK after $($i * 500) ms" | Out-File $logFile -Append -Encoding utf8
-                break
-            }
-        } catch {}
+    # Wait for server to become healthy (HTTP 200 OK)
+    $maxChecks = 80
+    for ($i = 0; $i -lt $maxChecks; $i++) {
+        Start-Sleep -Milliseconds 300
+        if (Test-ServerHealthy) {
+            $serverReady = $true
+            "Server ready (200 OK) after $(($i + 1) * 300) ms" | Out-File $logFile -Append -Encoding utf8
+            break
+        }
     }
 }
 
-# 4. Open app window (prefer Edge App mode, fallback to Chrome, fallback to default browser)
-$edgePath = "${env:ProgramFiles(x86)}\Microsoft\Edge\Application\msedge.exe"
-if (-not (Test-Path $edgePath)) {
-    $edgePath = "${env:ProgramFiles}\Microsoft\Edge\Application\msedge.exe"
-}
-$chromePath = "${env:ProgramFiles}\Google\Chrome\Application\chrome.exe"
-if (-not (Test-Path $chromePath)) {
-    $chromePath = "${env:ProgramFiles(x86)}\Google\Chrome\Application\chrome.exe"
+# 4. Open app in standalone window (Edge App mode -> Chrome App mode -> Default Browser)
+$browserExe = $null
+$edgeCandidates = @(
+    "${env:ProgramFiles(x86)}\Microsoft\Edge\Application\msedge.exe",
+    "${env:ProgramFiles}\Microsoft\Edge\Application\msedge.exe",
+    "$env:LOCALAPPDATA\Microsoft\Edge\Application\msedge.exe"
+)
+foreach ($p in $edgeCandidates) {
+    if ($p -and (Test-Path $p)) { $browserExe = $p; break }
 }
 
-if (Test-Path $edgePath) {
-    "Opening Edge app mode at $edgePath" | Out-File $logFile -Append -Encoding utf8
-    Start-Process -FilePath $edgePath -ArgumentList "--app=$url"
-} elseif (Test-Path $chromePath) {
-    "Opening Chrome app mode at $chromePath" | Out-File $logFile -Append -Encoding utf8
-    Start-Process -FilePath $chromePath -ArgumentList "--app=$url"
+if (-not $browserExe) {
+    $chromeCandidates = @(
+        "${env:ProgramFiles}\Google\Chrome\Application\chrome.exe",
+        "${env:ProgramFiles(x86)}\Google\Chrome\Application\chrome.exe",
+        "$env:LOCALAPPDATA\Google\Chrome\Application\chrome.exe"
+    )
+    foreach ($p in $chromeCandidates) {
+        if ($p -and (Test-Path $p)) { $browserExe = $p; break }
+    }
+}
+
+if ($browserExe) {
+    "Opening App Window using: $browserExe --app=$url" | Out-File $logFile -Append -Encoding utf8
+    Start-Process -FilePath $browserExe -ArgumentList "--app=$url"
 } else {
-    "Opening default browser" | Out-File $logFile -Append -Encoding utf8
+    "Opening default browser at $url" | Out-File $logFile -Append -Encoding utf8
     Start-Process $url
 }

@@ -67,5 +67,23 @@ export function useHabits() {
     }));
   };
 
-  return { habits, addHabit, updateHabit, deleteHabit, deleteHabits, setLog, isLoaded };
+  const setAllHabits = (newHabits: Habit[]) => {
+    setHabits(newHabits);
+  };
+
+  const clearAllHabits = () => {
+    setHabits([]);
+  };
+
+  return { 
+    habits, 
+    addHabit, 
+    updateHabit, 
+    deleteHabit, 
+    deleteHabits, 
+    setLog, 
+    setAllHabits, 
+    clearAllHabits, 
+    isLoaded 
+  };
 }

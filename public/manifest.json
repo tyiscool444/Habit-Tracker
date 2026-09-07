@@ -1,15 +1,15 @@
 {
-  "name": "HabitThat",
+  "name": "HabitThat — Habit & Task Tracker",
   "short_name": "HabitThat",
-  "description": "Modern habit and goal tracker with interactive grid heatmap",
+  "description": "Modern habit and goal tracker with interactive heatmap grid, live stopwatch, and cloud backup",
   "start_url": "/",
   "display": "standalone",
-  "background_color": "#090a0d",
-  "theme_color": "#090a0d",
+  "background_color": "#07080a",
+  "theme_color": "#07080a",
   "orientation": "any",
   "icons": [
     {
-      "src": "/favicon.ico",
+      "src": "/app-icon.ico",
       "sizes": "64x64 32x32 24x24 16x16",
       "type": "image/x-icon"
     }
