@@ -9,10 +9,11 @@ import { OneOffTaskCard } from '../components/OneOffTaskCard';
 import { HabitInsightsModal } from '../components/HabitInsightsModal';
 import { FloatingTimerWidget } from '../components/FloatingTimerWidget';
 import { DataSyncModal } from '../components/DataSyncModal';
+import { CalendarView } from '../components/CalendarView';
 import { TimerProvider } from '../context/TimerContext';
 import {
   PlusCircle, ChevronLeft, ChevronRight, Hash, Layers, Grid,
-  Target, Trash2, Search, Filter, X, Tag, Database, Sparkles, Plus
+  Target, Trash2, Search, Filter, X, Tag, Database, Sparkles, Plus, CalendarDays
 } from 'lucide-react';
 import { normalizeDateStr, getAmountInInterval } from '../lib/habitUtils';
 import { getSampleHabits } from '../lib/sampleHabits';
@@ -97,6 +98,9 @@ export default function Home() {
   
   // Data / Sync Backup Modal State
   const [showDataModal, setShowDataModal] = useState(false);
+
+  // Calendar Modal State
+  const [showCalendar, setShowCalendar] = useState(false);
 
   // Recurring Habit Modal States
   const [showHabitForm, setShowHabitForm] = useState(false);
@@ -386,6 +390,17 @@ export default function Home() {
           <div className="flex items-center gap-2.5 flex-wrap">
             <button
               type="button"
+              id="open-calendar"
+              onClick={() => setShowCalendar(true)}
+              className="px-3.5 py-2 rounded-xl bg-[#12141c] hover:bg-[#1a1e29] border border-gray-700/70 hover:border-orange-500/50 text-gray-300 hover:text-white text-xs font-bold transition flex items-center gap-2 shadow-sm active:scale-95"
+              title="View streaks and upcoming tasks on a calendar"
+            >
+              <CalendarDays size={14} className="text-orange-400" />
+              <span>Calendar</span>
+            </button>
+
+            <button
+              type="button"
               onClick={() => setShowDataModal(true)}
               className="px-3.5 py-2 rounded-xl bg-[#12141c] hover:bg-[#1a1e29] border border-gray-700/70 hover:border-gray-600 text-gray-300 hover:text-white text-xs font-bold transition flex items-center gap-2 shadow-sm active:scale-95"
               title="Export, Import, Backup or Load Templates"
@@ -610,6 +625,17 @@ export default function Home() {
             )}
           </div>
         )}
+
+        {/* Modal: Calendar (streaks + upcoming tasks) */}
+        <Modal isOpen={showCalendar} onClose={() => setShowCalendar(false)} maxWidth="max-w-6xl">
+          <CalendarView
+            habits={habits}
+            onClose={() => setShowCalendar(false)}
+            onUpdateTask={updateHabit}
+            onEditTask={(id) => { setShowCalendar(false); setEditingTaskId(id); }}
+            onGoToDate={(d) => { setShowCalendar(false); setSelectedDate(d); setViewMode('day'); }}
+          />
+        </Modal>
 
         {/* Modal: Data & Backup Sync */}
         <Modal isOpen={showDataModal} onClose={() => setShowDataModal(false)} maxWidth="max-w-xl">
