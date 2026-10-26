@@ -4,7 +4,7 @@ import React from 'react';
 import { useHabitTimer } from '../context/TimerContext';
 import { Habit } from '../types';
 import { unitLabel } from '../lib/habitUtils';
-import { Play, Pause, Square, ExternalLink, Timer, Coffee } from 'lucide-react';
+import { Play, Pause, Square, ExternalLink } from 'lucide-react';
 
 interface Props {
   habits: Habit[];

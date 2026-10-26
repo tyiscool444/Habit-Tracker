@@ -1,88 +1,79 @@
-# 🚀 HabitThat — Modern Habit & Goal Tracker
+# HabitThat - Habit and Goal Tracker
 
-> A sleek, privacy-first habit and goal tracking web application featuring an interactive heatmap grid, live stopwatch timers, subtask checklists, and cloud-ready JSON backup sync.
+A habit and goal tracking web application featuring an interactive matrix grid, study timer techniques, calendar streaks, and local data sync.
 
-Built with **Next.js 16 (App Router)**, **React 19**, **TypeScript**, and **Tailwind CSS**.
-
----
-
-## ✨ Features
-
-- 📊 **Interactive Heatmap Grid**: Visual, Excel-style cell matrix with Day, Week, Month, and Year zoom levels.
-- 🎯 **Habits vs One-Off Tasks**:
-  - **Recurring Habits**: Daily, weekly, and monthly habits with customizable quotas and units (minutes, grams, liters, steps, etc.).
-  - **One-Off Goals & Tasks**: Target-dated goals with expandable subtask checklists and completion tracking.
-- ⏱️ **Live Floating Stopwatch**: Time your habits (workouts, study, reading) in real-time and log elapsed duration directly to your daily score.
-- 📈 **Insights & Streaks**: View consistency percentages, 30-day visual trends, longest streaks, and lifetime totals.
-- 💾 **Cloud Backup & Device Sync**:
-  - Export your complete data to a single JSON backup.
-  - Import and restore backups across any device (desktop, phone, tablet).
-  - 1-Click Starter Preset with curated habits for instant demo.
-- 📱 **PWA & Mobile Ready**: Responsive dark-mode interface designed for desktop browsers and mobile homescreens.
-- 🔒 **100% Privacy First**: All data is stored in your local browser storage. No accounts, tracking, or external database required.
+Built with Next.js, React, TypeScript, and Tailwind CSS.
 
 ---
 
-## ⚡ 1-Click Vercel Deployment Guide
+## Features
 
-Deploying **HabitThat** to Vercel via Git is completely zero-config and takes under 1 minute:
+- Interactive Matrix Grid: Cell matrix with Day, Week, Month, and Year views to log and visualize progress.
+- Recurring Habits: Daily, weekly, and monthly habits with customizable quotas and units (minutes, hours, steps, liters, etc.).
+- One-Off Goals and Tasks: Target-dated tasks with subtask checklists and progress tracking.
+- Study and Focus Timers: Popular timer techniques including Pomodoro (25/5), 50/10 Rule, 90-Minute Focus Block, Flowtime, 2-Minute Rule, and Custom Timers. Focus time can be logged directly to minute- or hour-based habits.
+- Floating Timer: Persistent floating widget to monitor active focus sessions while navigating the app.
+- Calendar and Streaks: Monthly calendar view with streak tracking and upcoming task schedules.
+- Data Backup and Sync: Export and import complete habit data via JSON files. Includes starter templates for testing.
+- Privacy First: Data is stored locally in the browser via localStorage. No external database or account creation required.
 
-### Step 1: Push Changes to GitHub
-Make sure all your latest files are pushed to your GitHub repository:
+---
+
+## Getting Started
+
+### Prerequisites
+
+Node.js 18 or higher and npm.
+
+### Installation
+
+1. Clone the repository:
 ```bash
-git add .
-git commit -m "feat: optimize for Vercel deployment with cloud data sync"
-git push origin main
-```
-
-### Step 2: Import Project on Vercel
-1. Log in to [Vercel](https://vercel.com).
-2. Click **"Add New..."** → **"Project"**.
-3. Under **"Import Git Repository"**, choose your repository (`Habit-Tracker`).
-4. Vercel will automatically detect **Next.js** framework settings:
-   - **Framework Preset**: Next.js
-   - **Build Command**: `next build` (or `npm run build`)
-   - **Output Directory**: `.next`
-   - **Install Command**: `npm install`
-5. Click **"Deploy"**.
-
-Your app will be built and deployed to a global edge network with an instant `*.vercel.app` URL and automatic CI/CD on every `git push`!
-
----
-
-## 💻 Local Development
-
-To run the project locally:
-
-```bash
-# 1. Clone repository
 git clone https://github.com/tyiscool444/Habit-Tracker.git
 cd Habit-Tracker
-
-# 2. Install dependencies
-npm install
-
-# 3. Start local development server
-npm run dev
-
-# 4. Open http://localhost:3000 in your browser
 ```
 
-### Useful Scripts
+2. Install dependencies:
+```bash
+npm install
+```
 
-- `npm run dev`: Starts the Next.js development server.
-- `npm run build`: Builds the production bundle with TypeScript and ESLint verification.
-- `npm run start`: Starts the production server.
-- `npm run lint`: Runs ESLint across the codebase.
+3. Start the development server:
+```bash
+npm run dev
+```
+
+4. Open `http://localhost:3000` in your browser.
+
+### Available Scripts
+
+- `npm run dev`: Starts the local development server.
+- `npm run build`: Creates an optimized production build.
+- `npm run start`: Runs the built production server.
+- `npm run lint`: Runs ESLint checks.
 
 ---
 
-## 🛠️ Tech Stack
+## Deployment
 
-- **Framework**: [Next.js 16 (Turbopack / App Router)](https://nextjs.org/)
-- **UI Library**: [React 19](https://react.dev/)
-- **Styling**: [Tailwind CSS 4](https://tailwindcss.com/)
-- **Icons**: [Lucide React](https://lucide.dev/)
-- **Date Handling**: [date-fns](https://date-fns.org/)
-- **Animations**: [Framer Motion](https://www.framer.com/motion/)
-- **Hosting**: [Vercel](https://vercel.com/)
+### Deploy to Vercel
+
+1. Push your code to a GitHub repository.
+2. Sign in to Vercel and import your repository.
+3. Framework settings will be detected automatically:
+   - Framework Preset: Next.js
+   - Build Command: `next build`
+   - Output Directory: `.next`
+   - Install Command: `npm install`
+4. Click Deploy.
+
+---
+
+## Tech Stack
+
+- Framework: Next.js (App Router)
+- UI: React
+- Language: TypeScript
+- Styling: Tailwind CSS
+- Icons: Lucide React
+- Date Utilities: date-fns

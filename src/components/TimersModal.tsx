@@ -10,8 +10,8 @@ import {
 } from '../lib/timerTechniques';
 import {
   Timer, X, Play, Pause, RotateCcw, SkipForward, Square,
-  Volume2, VolumeX, Coffee, Sparkles, Check, ChevronRight,
-  Sliders, ArrowLeft, Brain, Clock, ShieldCheck
+  Volume2, VolumeX, Coffee, Sparkles, Check,
+  Sliders, ArrowLeft, Brain, ShieldCheck
 } from 'lucide-react';
 
 interface Props {
