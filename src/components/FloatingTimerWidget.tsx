@@ -4,72 +4,103 @@ import React from 'react';
 import { useHabitTimer } from '../context/TimerContext';
 import { Habit } from '../types';
 import { unitLabel } from '../lib/habitUtils';
-import { Play, Pause, Square, ExternalLink } from 'lucide-react';
+import { Play, Pause, Square, ExternalLink, Timer, Coffee } from 'lucide-react';
 
 interface Props {
   habits: Habit[];
   onOpenInsights: (habitId: string) => void;
+  onOpenTimers?: () => void;
 }
 
-export function FloatingTimerWidget({ habits, onOpenInsights }: Props) {
+export function FloatingTimerWidget({ habits, onOpenInsights, onOpenTimers }: Props) {
   const {
+    timerState,
     activeHabitId,
+    activeHabit,
+    activeTechnique,
     isRunning,
+    mode,
+    remainingSeconds,
     elapsedSeconds,
+    targetSeconds,
     pauseTimer,
     resumeTimer,
     stopTimer,
     formatTime,
   } = useHabitTimer();
 
-  if (!activeHabitId) return null;
+  const isAnyTimerActive = Boolean(activeHabitId || timerState.techniqueId);
+  if (!isAnyTimerActive) return null;
 
-  const activeHabit = habits.find(h => h.id === activeHabitId);
-  if (!activeHabit) return null;
+  const habit = activeHabit || (activeHabitId ? habits.find(h => h.id === activeHabitId) : null);
+  const technique = activeTechnique;
+  const themeColor = technique?.color || (habit?.color || '#06b6d4');
+  const displayEmoji = technique?.emoji || (habit?.icon || '⏱️');
+  const title = habit ? habit.name : (technique ? technique.shortName : 'Focus Session');
+
+  // Display countdown if bounded interval, else elapsed
+  const displayTime = targetSeconds !== null ? formatTime(remainingSeconds) : formatTime(elapsedSeconds);
+
+  const handleOpen = () => {
+    if (onOpenTimers) {
+      onOpenTimers();
+    } else if (habit) {
+      onOpenInsights(habit.id);
+    }
+  };
 
   return (
     <div className="fixed bottom-5 right-5 z-40 animate-in slide-in-from-bottom-5 duration-300">
       <div 
         className="flex items-center gap-3 bg-[#0d1017]/95 border rounded-2xl p-3 shadow-2xl backdrop-blur-xl transition-all"
         style={{
-          borderColor: isRunning ? `${activeHabit.color}60` : '#374151',
-          boxShadow: isRunning ? `0 8px 32px -4px ${activeHabit.color}30, 0 0 15px ${activeHabit.color}20` : undefined,
+          borderColor: isRunning ? `${themeColor}60` : '#374151',
+          boxShadow: isRunning ? `0 8px 32px -4px ${themeColor}30, 0 0 15px ${themeColor}20` : undefined,
         }}
       >
-        {/* Habit Icon & Status */}
+        {/* Habit / Technique Icon & Status */}
         <div 
-          onClick={() => onOpenInsights(activeHabit.id)}
+          onClick={handleOpen}
           className="relative w-10 h-10 rounded-xl flex items-center justify-center text-lg select-none cursor-pointer hover:scale-105 transition shadow-inner"
-          style={{ backgroundColor: `${activeHabit.color}25`, border: `1px solid ${activeHabit.color}50` }}
+          style={{ backgroundColor: `${themeColor}25`, border: `1px solid ${themeColor}50` }}
         >
-          {activeHabit.icon}
+          {displayEmoji}
           {isRunning && (
             <span className="absolute -top-1 -right-1 flex h-3 w-3">
-              <span className="animate-ping absolute inline-flex h-full w-full rounded-full opacity-75" style={{ backgroundColor: activeHabit.color }} />
-              <span className="relative inline-flex rounded-full h-3 w-3" style={{ backgroundColor: activeHabit.color }} />
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full opacity-75" style={{ backgroundColor: themeColor }} />
+              <span className="relative inline-flex rounded-full h-3 w-3" style={{ backgroundColor: themeColor }} />
             </span>
           )}
         </div>
 
-        {/* Habit Info & Live Counter */}
+        {/* Habit / Session Info & Live Counter */}
         <div 
-          onClick={() => onOpenInsights(activeHabit.id)}
+          onClick={handleOpen}
           className="flex flex-col cursor-pointer pr-2"
         >
           <div className="flex items-center gap-1.5">
             <span className="text-xs font-bold text-white tracking-tight max-w-[140px] truncate">
-              {activeHabit.name}
+              {title}
             </span>
-            <span className="text-[10px] font-semibold text-gray-400">
-              ({unitLabel(activeHabit.unit)})
-            </span>
+            {habit && (
+              <span className="text-[10px] font-semibold text-gray-400">
+                ({unitLabel(habit.unit)})
+              </span>
+            )}
           </div>
           <div className="flex items-center gap-2 mt-0.5">
-            <span className="font-mono text-sm font-black text-emerald-400 tracking-wider">
-              {formatTime(elapsedSeconds)}
+            <span 
+              className="font-mono text-sm font-black tracking-wider"
+              style={{ color: themeColor }}
+            >
+              {displayTime}
             </span>
-            <span className={`text-[10px] font-semibold px-1.5 py-0.2 rounded ${isRunning ? 'bg-emerald-500/20 text-emerald-300' : 'bg-amber-500/20 text-amber-300'}`}>
-              {isRunning ? 'RUNNING' : 'PAUSED'}
+            <span className={`text-[9px] font-bold px-1.5 py-0.2 rounded uppercase ${
+              mode === 'break' || mode === 'longBreak'
+                ? 'bg-amber-500/20 text-amber-300'
+                : (isRunning ? 'bg-emerald-500/20 text-emerald-300' : 'bg-gray-800 text-gray-400')
+            }`}>
+              {mode === 'break' || mode === 'longBreak' ? 'BREAK' : (isRunning ? 'FOCUS' : 'PAUSED')}
             </span>
           </div>
         </div>
@@ -80,6 +111,7 @@ export function FloatingTimerWidget({ habits, onOpenInsights }: Props) {
             <button
               onClick={pauseTimer}
               className="w-8 h-8 rounded-lg bg-amber-500/20 hover:bg-amber-500/30 text-amber-400 border border-amber-500/40 flex items-center justify-center transition active:scale-95 shadow-sm"
+              title="Pause"
             >
               <Pause size={14} fill="currentColor" />
             </button>
@@ -87,6 +119,7 @@ export function FloatingTimerWidget({ habits, onOpenInsights }: Props) {
             <button
               onClick={resumeTimer}
               className="w-8 h-8 rounded-lg bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-400 border border-emerald-500/40 flex items-center justify-center transition active:scale-95 shadow-sm"
+              title="Resume"
             >
               <Play size={14} fill="currentColor" />
             </button>
@@ -95,13 +128,15 @@ export function FloatingTimerWidget({ habits, onOpenInsights }: Props) {
           <button
             onClick={stopTimer}
             className="w-8 h-8 rounded-lg bg-gray-900 hover:bg-red-500/20 text-gray-400 hover:text-red-400 border border-gray-700/80 hover:border-red-500/40 flex items-center justify-center transition active:scale-95 shadow-sm"
+            title="Stop session"
           >
             <Square size={12} fill="currentColor" />
           </button>
 
           <button
-            onClick={() => onOpenInsights(activeHabit.id)}
+            onClick={handleOpen}
             className="w-8 h-8 rounded-lg bg-gray-900 hover:bg-gray-800 text-gray-400 hover:text-white border border-gray-700/80 flex items-center justify-center transition active:scale-95 shadow-sm"
+            title="Open timers view"
           >
             <ExternalLink size={13} />
           </button>

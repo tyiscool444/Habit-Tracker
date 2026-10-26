@@ -10,10 +10,11 @@ import { HabitInsightsModal } from '../components/HabitInsightsModal';
 import { FloatingTimerWidget } from '../components/FloatingTimerWidget';
 import { DataSyncModal } from '../components/DataSyncModal';
 import { CalendarView } from '../components/CalendarView';
+import { TimersModal } from '../components/TimersModal';
 import { TimerProvider } from '../context/TimerContext';
 import {
   PlusCircle, ChevronLeft, ChevronRight, Hash, Layers, Grid,
-  Target, Trash2, Search, Filter, X, Tag, Database, Sparkles, Plus, CalendarDays
+  Target, Trash2, Search, Filter, X, Tag, Database, Sparkles, Plus, CalendarDays, Timer
 } from 'lucide-react';
 import { normalizeDateStr, getAmountInInterval } from '../lib/habitUtils';
 import { getSampleHabits } from '../lib/sampleHabits';
@@ -101,6 +102,9 @@ export default function Home() {
 
   // Calendar Modal State
   const [showCalendar, setShowCalendar] = useState(false);
+
+  // Timers Modal State
+  const [showTimers, setShowTimers] = useState(false);
 
   // Recurring Habit Modal States
   const [showHabitForm, setShowHabitForm] = useState(false);
@@ -401,6 +405,17 @@ export default function Home() {
 
             <button
               type="button"
+              id="open-timers"
+              onClick={() => setShowTimers(true)}
+              className="px-3.5 py-2 rounded-xl bg-[#12141c] hover:bg-[#1a1e29] border border-gray-700/70 hover:border-cyan-500/50 text-gray-300 hover:text-white text-xs font-bold transition flex items-center gap-2 shadow-sm active:scale-95"
+              title="Popular study timer techniques & focus sessions"
+            >
+              <Timer size={14} className="text-cyan-400" />
+              <span>Timers</span>
+            </button>
+
+            <button
+              type="button"
               onClick={() => setShowDataModal(true)}
               className="px-3.5 py-2 rounded-xl bg-[#12141c] hover:bg-[#1a1e29] border border-gray-700/70 hover:border-gray-600 text-gray-300 hover:text-white text-xs font-bold transition flex items-center gap-2 shadow-sm active:scale-95"
               title="Export, Import, Backup or Load Templates"
@@ -634,6 +649,14 @@ export default function Home() {
             onUpdateTask={updateHabit}
             onEditTask={(id) => { setShowCalendar(false); setEditingTaskId(id); }}
             onGoToDate={(d) => { setShowCalendar(false); setSelectedDate(d); setViewMode('day'); }}
+          />
+        </Modal>
+
+        {/* Modal: Timers (Popular study techniques & custom focus sessions) */}
+        <Modal isOpen={showTimers} onClose={() => setShowTimers(false)} maxWidth="max-w-5xl">
+          <TimersModal
+            habits={habits}
+            onClose={() => setShowTimers(false)}
           />
         </Modal>
 
@@ -1159,7 +1182,11 @@ export default function Home() {
           </div>
         )}
       </div>
-      <FloatingTimerWidget habits={habits} onOpenInsights={(id) => setInsightsHabitId(id)} />
+      <FloatingTimerWidget
+        habits={habits}
+        onOpenInsights={(id) => setInsightsHabitId(id)}
+        onOpenTimers={() => setShowTimers(true)}
+      />
     </div>
     </TimerProvider>
   );
