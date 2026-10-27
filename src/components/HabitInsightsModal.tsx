@@ -1,24 +1,16 @@
 'use client';
 
 import { Habit } from '../types';
-import { unitLabel, timeframeSuffix, getAmountInInterval, normalizeDateStr, formatAmount } from '../lib/habitUtils';
+import {
+  unitLabel, timeframeSuffix, getAmountInInterval, getPeriodBounds, normalizeDateStr, formatAmount, isHabitMetOn, calculateStreaks, getTrackingStart,
+} from '../lib/habitUtils';
+import { formatTime } from '../lib/timerTechniques';
 import { useHabitTimer } from '../context/TimerContext';
-import { 
+import {
   X, Target, Trophy, Calendar, TrendingUp, BarChart3,
   Clock, Play, Pause, Square, Timer as TimerIcon
 } from 'lucide-react';
-import {
-  format,
-  parseISO,
-  differenceInDays,
-  startOfWeek,
-  endOfWeek,
-  startOfMonth,
-  endOfMonth,
-  startOfDay,
-  addDays,
-  subDays,
-} from 'date-fns';
+import { format, parseISO, differenceInDays, startOfDay, subDays, isBefore } from 'date-fns';
 
 interface Props {
   habit: Habit;
@@ -26,9 +18,10 @@ interface Props {
   onEdit: () => void;
 }
 
+const QUICK_ADD_MINUTES = [5, 15, 25];
+
 export function HabitInsightsModal({ habit, onClose, onEdit }: Props) {
   const today = startOfDay(new Date());
-  const todayStr = normalizeDateStr(today);
   const startDate = parseISO(habit.startDate);
   const totalDaysTracked = Math.max(1, differenceInDays(today, startDate) + 1);
 
@@ -41,75 +34,38 @@ export function HabitInsightsModal({ habit, onClose, onEdit }: Props) {
     resumeTimer,
     stopTimer,
     addSeconds,
-    formatTime,
   } = useHabitTimer();
 
   const isThisHabitActive = activeHabitId === habit.id;
   const isThisHabitRunning = isThisHabitActive && isRunning;
   const currentSessionSec = isThisHabitActive ? elapsedSeconds : 0;
-  const todayAmount = habit.logs[todayStr] || 0;
+  const todayAmount = habit.logs[normalizeDateStr(today)] || 0;
 
-  // Calculate lifetime total logged
-  let totalAmountLogged = 0;
-  let loggedDaysCount = 0;
-  Object.values(habit.logs).forEach((val) => {
-    if (val > 0) {
-      totalAmountLogged += val;
-      loggedDaysCount++;
-    }
+  const loggedValues = Object.values(habit.logs).filter(v => v > 0);
+  const totalAmountLogged = loggedValues.reduce((sum, v) => sum + v, 0);
+
+  const trackingStart = getTrackingStart(habit);
+
+  // Each of the last 30 days, judged by the period (day / week / month) it belongs to
+  const last30DaysTrend = Array.from({ length: 30 }, (_, i) => {
+    const date = subDays(today, 29 - i);
+    const tracked = !isBefore(date, trackingStart);
+    return { date, amount: habit.logs[normalizeDateStr(date)] || 0, tracked, isMet: tracked && isHabitMetOn(habit, date) };
   });
+  const last30DaysMet = last30DaysTrend.filter(d => d.isMet).length;
+  const last30Tracked = last30DaysTrend.filter(d => d.tracked).length;
+  const last30Rate = last30Tracked > 0 ? Math.round((last30DaysMet / last30Tracked) * 100) : 0;
 
-  // Calculate consistency in the last 30 days
-  let last30DaysMet = 0;
-  const last30DaysTrend: { date: Date; amount: number; isMet: boolean }[] = [];
-
-  for (let i = 29; i >= 0; i--) {
-    const d = subDays(today, i);
-    const dStr = normalizeDateStr(d);
-    const amt = habit.logs[dStr] || 0;
-    const isMet = habit.type === 'START' ? amt >= habit.quota : amt <= habit.quota && amt > 0;
-    if (isMet) last30DaysMet++;
-    last30DaysTrend.push({ date: d, amount: amt, isMet });
-  }
-
-  const last30Rate = Math.round((last30DaysMet / 30) * 100);
-
-  // Calculate longest streak
-  // Simple scan across all days from startDate to today
-  let longestStreak = 0;
-  let tempStreak = 0;
-  for (let i = 0; i < totalDaysTracked; i++) {
-    const d = addDays(startDate, i);
-    const dStr = normalizeDateStr(d);
-    const amt = habit.logs[dStr] || 0;
-    const isMet = habit.type === 'START' ? amt >= habit.quota : amt <= habit.quota;
-    if (isMet) {
-      tempStreak++;
-      if (tempStreak > longestStreak) longestStreak = tempStreak;
-    } else {
-      tempStreak = 0;
-    }
-  }
-
-  // Current Week Progress
-  const weekStart = startOfWeek(today, { weekStartsOn: 1 });
-  const weekEnd = endOfWeek(today, { weekStartsOn: 1 });
-  const thisWeekAmount = getAmountInInterval(habit.logs, weekStart, weekEnd);
-
-  // Current Month Progress
-  const monthStart = startOfMonth(today);
-  const monthEnd = endOfMonth(today);
-  const thisMonthAmount = getAmountInInterval(habit.logs, monthStart, monthEnd);
+  const longestStreak = calculateStreaks(habit).best;
+  const amountThis = (timeframe: 'weekly' | 'monthly') => {
+    const { start, end } = getPeriodBounds(timeframe, today);
+    return getAmountInInterval(habit.logs, start, end);
+  };
+  const thisWeekAmount = amountThis('weekly');
+  const thisMonthAmount = amountThis('monthly');
 
   return (
-    <div
-      onClick={onClose}
-      className="fixed inset-0 bg-black/75 backdrop-blur-md z-50 flex items-center justify-center p-4 cursor-pointer animate-in fade-in duration-200"
-    >
-      <div
-        onClick={(e) => e.stopPropagation()}
-        className="cursor-default w-full max-w-lg bg-[#0e1015] border border-gray-800 rounded-2xl p-6 shadow-2xl space-y-6 text-white overflow-hidden"
-      >
+    <div className="w-full bg-[#0e1015] border border-gray-800 rounded-2xl p-6 shadow-2xl space-y-6 text-white max-h-[90vh] overflow-y-auto no-scrollbar">
         {/* Header with Icon, Name, and Close Button */}
         <div className="flex items-center justify-between pb-4 border-b border-gray-800/80">
           <div className="flex items-center gap-3">
@@ -236,36 +192,23 @@ export function HabitInsightsModal({ habit, onClose, onEdit }: Props) {
 
             {/* Quick Add Presets */}
             <div className="flex items-center gap-1">
-              <button
-                type="button"
-                onClick={() => {
-                  if (!isThisHabitActive) startTimer(habit);
-                  addSeconds(300); // +5m
-                }}
-                className="px-2.5 py-2 rounded-lg bg-gray-900 hover:bg-gray-800 text-gray-300 hover:text-white border border-gray-800 text-xs font-bold transition"
-              >
-                +5m
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  if (!isThisHabitActive) startTimer(habit);
-                  addSeconds(900); // +15m
-                }}
-                className="px-2.5 py-2 rounded-lg bg-gray-900 hover:bg-gray-800 text-gray-300 hover:text-white border border-gray-800 text-xs font-bold transition"
-              >
-                +15m
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  if (!isThisHabitActive) startTimer(habit);
-                  addSeconds(1500); // +25m Pomodoro
-                }}
-                className="px-2.5 py-2 rounded-lg bg-purple-600/20 hover:bg-purple-600/30 text-purple-300 hover:text-white border border-purple-500/40 text-xs font-bold transition"
-              >
-                +25m
-              </button>
+              {QUICK_ADD_MINUTES.map(m => (
+                <button
+                  key={m}
+                  type="button"
+                  onClick={() => {
+                    if (!isThisHabitActive) startTimer(habit);
+                    addSeconds(m * 60);
+                  }}
+                  className={`px-2.5 py-2 rounded-lg text-xs font-bold transition border ${
+                    m === 25
+                      ? 'bg-purple-600/20 hover:bg-purple-600/30 text-purple-300 hover:text-white border-purple-500/40'
+                      : 'bg-gray-900 hover:bg-gray-800 text-gray-300 hover:text-white border-gray-800'
+                  }`}
+                >
+                  +{m}m
+                </button>
+              ))}
             </div>
 
             {/* Reset / Stop Button */}
@@ -290,7 +233,7 @@ export function HabitInsightsModal({ habit, onClose, onEdit }: Props) {
               30d Rate
             </span>
             <span className="text-xl font-black text-emerald-400 mt-1">{last30Rate}%</span>
-            <span className="text-[10px] text-gray-500">{last30DaysMet} / 30 days</span>
+            <span className="text-[10px] text-gray-500">{last30DaysMet} / {last30Tracked} days</span>
           </div>
 
           {/* Longest Streak */}
@@ -316,7 +259,7 @@ export function HabitInsightsModal({ habit, onClose, onEdit }: Props) {
               {formatAmount(totalAmountLogged)}
               <span className="text-xs font-semibold text-gray-500 ml-0.5">{unitLabel(habit.unit)}</span>
             </span>
-            <span className="text-[10px] text-gray-500">{loggedDaysCount} active days</span>
+            <span className="text-[10px] text-gray-500">{loggedValues.length} active days</span>
           </div>
 
           {/* Days Tracked */}
@@ -392,7 +335,6 @@ export function HabitInsightsModal({ habit, onClose, onEdit }: Props) {
             Done
           </button>
         </div>
-      </div>
     </div>
   );
 }

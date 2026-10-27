@@ -2,7 +2,10 @@
 
 import { useMemo, useState } from 'react';
 import { Habit } from '../types';
-import { normalizeDateStr, getAmountInInterval, timeframeSuffix } from '../lib/habitUtils';
+import {
+  normalizeDateStr, timeframeSuffix, WEEK_OPTIONS,
+  taskDateStr, isTaskComplete, isHabitMetOn, getTrackingStart, toggleTaskComplete,
+} from '../lib/habitUtils';
 import {
   X, ChevronLeft, ChevronRight, Flame, Trophy, CalendarDays, Target,
   Check, AlertTriangle, Clock, ArrowRight,
@@ -33,35 +36,11 @@ const WEEKDAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 
 /* ---------- Helpers ---------- */
 
-function taskDateStr(t: Habit) {
-  return normalizeDateStr(t.targetDate || t.startDate || new Date());
-}
+const habitStart = (h: Habit) => startOfDay(getTrackingStart(h));
 
-function isTaskComplete(t: Habit) {
-  const amt = t.logs[taskDateStr(t)] || 0;
-  return t.type === 'START' ? amt >= t.quota : amt <= t.quota && amt > 0;
-}
-
-function habitStart(h: Habit): Date {
-  let start = parseISO(h.startDate);
-  for (const d of Object.keys(h.logs)) {
-    const p = parseISO(d);
-    if (isBefore(p, start)) start = p;
-  }
-  return startOfDay(start);
-}
-
-/** Whether a recurring habit's period containing `day` meets its goal. */
-function isHabitMetOn(h: Habit, day: Date): boolean {
-  let amt: number;
-  if (h.timeframe === 'daily') {
-    amt = h.logs[normalizeDateStr(day)] || 0;
-  } else if (h.timeframe === 'weekly') {
-    amt = getAmountInInterval(h.logs, startOfWeek(day, { weekStartsOn: 1 }), endOfWeek(day, { weekStartsOn: 1 }));
-  } else {
-    amt = getAmountInInterval(h.logs, startOfMonth(day), endOfMonth(day));
-  }
-  return h.type === 'START' ? amt >= h.quota : amt <= h.quota;
+/** Key of the week / month containing `d`, used to count periodic streaks once per period. */
+function periodKey(h: Habit, d: Date) {
+  return h.timeframe === 'weekly' ? normalizeDateStr(startOfWeek(d, WEEK_OPTIONS)) : format(d, 'yyyy-MM');
 }
 
 function relativeDayLabel(date: Date, today: Date) {
@@ -98,8 +77,8 @@ export function CalendarView({ habits, onClose, onEditTask, onUpdateTask, onGoTo
 
   // Calendar grid (Mon → Sun, full weeks)
   const gridDays = useMemo(() => {
-    const start = startOfWeek(viewMonth, { weekStartsOn: 1 });
-    const end = endOfWeek(endOfMonth(viewMonth), { weekStartsOn: 1 });
+    const start = startOfWeek(viewMonth, WEEK_OPTIONS);
+    const end = endOfWeek(endOfMonth(viewMonth), WEEK_OPTIONS);
     return eachDayOfInterval({ start, end });
   }, [viewMonth]);
 
@@ -132,9 +111,7 @@ export function CalendarView({ habits, onClose, onEditTask, onUpdateTask, onGoTo
 
       if (periodic) {
         // Count streak in weeks / months rather than days
-        const key = focusedHabit!.timeframe === 'weekly'
-          ? normalizeDateStr(startOfWeek(d, { weekStartsOn: 1 }))
-          : format(d, 'yyyy-MM');
+        const key = periodKey(focusedHabit!, d);
         if (key !== lastPeriodKey) {
           lastPeriodKey = key;
           if (perfect) streak += 1;
@@ -169,9 +146,7 @@ export function CalendarView({ habits, onClose, onEditTask, onUpdateTask, onGoTo
       const perfect = active.length > 0 && active.every(h => isHabitMetOn(h, d));
       const isToday = isSameDay(d, today);
       if (periodic) {
-        const key = focusedHabit!.timeframe === 'weekly'
-          ? normalizeDateStr(startOfWeek(d, { weekStartsOn: 1 }))
-          : format(d, 'yyyy-MM');
+        const key = periodKey(focusedHabit!, d);
         if (key === lastKey) continue;
         lastKey = key;
       }
@@ -217,18 +192,7 @@ export function CalendarView({ habits, onClose, onEditTask, onUpdateTask, onGoTo
     [recurring, selectedDay]
   );
 
-  const toggleTask = (t: Habit) => {
-    const dStr = taskDateStr(t);
-    const done = isTaskComplete(t);
-    const logs = { ...t.logs };
-    const next = t.type === 'START' ? (done ? 0 : t.quota) : (done ? t.quota + 1 : 0);
-    if (next <= 0) delete logs[dStr];
-    else logs[dStr] = next;
-    const subtasks = t.type === 'START' && t.subtasks?.length
-      ? t.subtasks.map(s => ({ ...s, completed: !done }))
-      : t.subtasks;
-    onUpdateTask({ ...t, logs, subtasks });
-  };
+  const toggleTask = (t: Habit) => onUpdateTask(toggleTaskComplete(t));
 
   const unitWord = focusedHabit
     ? (focusedHabit.timeframe === 'weekly' ? 'week' : focusedHabit.timeframe === 'monthly' ? 'month' : 'day')

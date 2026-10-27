@@ -107,3 +107,17 @@ export function calculateFlowtimeBreak(focusMinutes: number): number {
   if (focusMinutes <= 90) return 15;
   return Math.min(30, Math.round(focusMinutes / 5));
 }
+
+/** Recommended Flowtime break (minutes) after `elapsedSeconds` of focus. */
+export function flowtimeBreakFor(elapsedSeconds: number): number {
+  return calculateFlowtimeBreak(Math.max(1, Math.round(elapsedSeconds / 60)));
+}
+
+/** mm:ss, or hh:mm:ss once an hour is reached. */
+export function formatTime(totalSeconds: number): string {
+  const hrs = Math.floor(totalSeconds / 3600);
+  const mins = Math.floor((totalSeconds % 3600) / 60);
+  const secs = totalSeconds % 60;
+  const pad = (n: number) => n.toString().padStart(2, '0');
+  return hrs > 0 ? `${pad(hrs)}:${pad(mins)}:${pad(secs)}` : `${pad(mins)}:${pad(secs)}`;
+}

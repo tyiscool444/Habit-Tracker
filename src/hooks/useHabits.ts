@@ -1,8 +1,10 @@
 'use client';
 
-import { useState, useEffect, useSyncExternalStore } from 'react';
+import { useState, useEffect, useSyncExternalStore, useCallback } from 'react';
 import { Habit } from '../types';
+import { withLog } from '../lib/habitUtils';
 
+const STORAGE_KEY = 'habits-v2';
 const emptySubscribe = () => () => {};
 
 export function useHabits() {
@@ -15,7 +17,7 @@ export function useHabits() {
   const [habits, setHabits] = useState<Habit[]>(() => {
     if (typeof window !== 'undefined') {
       try {
-        const saved = localStorage.getItem('habits-v2');
+        const saved = localStorage.getItem(STORAGE_KEY);
         if (saved) return JSON.parse(saved);
       } catch {
         // Fallback for corrupted storage
@@ -27,63 +29,38 @@ export function useHabits() {
   // Save to localStorage whenever habits change
   useEffect(() => {
     if (isLoaded) {
-      localStorage.setItem('habits-v2', JSON.stringify(habits));
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(habits));
     }
   }, [habits, isLoaded]);
 
-  const addHabit = (newHabit: Habit) => {
-    setHabits((prev) => [...prev, newHabit]);
-  };
+  const addHabit = useCallback((newHabit: Habit) => {
+    setHabits(prev => [...prev, newHabit]);
+  }, []);
 
-  const updateHabit = (updatedHabit: Habit) => {
-    setHabits((prev) => prev.map(h => h.id === updatedHabit.id ? updatedHabit : h));
-  };
+  const updateHabit = useCallback((updatedHabit: Habit) => {
+    setHabits(prev => prev.map(h => h.id === updatedHabit.id ? updatedHabit : h));
+  }, []);
 
-  const deleteHabit = (id: string) => {
-    setHabits((prev) => prev.filter(h => h.id !== id));
-  };
-
-  const deleteHabits = (ids: string[]) => {
+  const deleteHabits = useCallback((ids: string[]) => {
     const idSet = new Set(ids);
-    setHabits((prev) => prev.filter(h => !idSet.has(h.id)));
-  };
+    setHabits(prev => prev.filter(h => !idSet.has(h.id)));
+  }, []);
 
   /**
    * Sets the logged amount for a given date.
    * If amount is 0 (or less), removes the log entry for that date.
    */
-  const setLog = (habitId: string, logDate: string, amount: number) => {
-    setHabits((prev) => prev.map(habit => {
-      if (habit.id !== habitId) return habit;
+  const setLog = useCallback((habitId: string, logDate: string, amount: number) => {
+    setHabits(prev => prev.map(h => h.id === habitId ? withLog(h, logDate, amount) : h));
+  }, []);
 
-      const updatedLogs = { ...habit.logs };
-      if (amount <= 0) {
-        delete updatedLogs[logDate];
-      } else {
-        updatedLogs[logDate] = amount;
-      }
-
-      return { ...habit, logs: updatedLogs };
-    }));
-  };
-
-  const setAllHabits = (newHabits: Habit[]) => {
-    setHabits(newHabits);
-  };
-
-  const clearAllHabits = () => {
-    setHabits([]);
-  };
-
-  return { 
-    habits, 
-    addHabit, 
-    updateHabit, 
-    deleteHabit, 
-    deleteHabits, 
-    setLog, 
-    setAllHabits, 
-    clearAllHabits, 
-    isLoaded 
+  return {
+    habits,
+    addHabit,
+    updateHabit,
+    deleteHabits,
+    setLog,
+    setAllHabits: setHabits,
+    isLoaded,
   };
 }

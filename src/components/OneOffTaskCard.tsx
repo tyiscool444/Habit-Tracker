@@ -1,28 +1,24 @@
 'use client';
 
 import { useState } from 'react';
-import { Habit, SubTask } from '../types';
-import { unitLabel, formatAmount, normalizeDateStr } from '../lib/habitUtils';
+import { Habit } from '../types';
+import {
+  unitLabel, formatAmount, generateId, taskDateStr, isTaskComplete, withLog, toggleTaskComplete,
+} from '../lib/habitUtils';
 import { Check, Calendar, Plus, Minus, ChevronDown, ListChecks, Trash2 } from 'lucide-react';
 import { format, parseISO, isBefore, startOfDay, isSameDay } from 'date-fns';
 
 interface Props {
   task: Habit;
-  onLog: (date: string, amount: number) => void;
   onEdit: () => void;
-  onUpdateTask?: (updatedTask: Habit) => void;
+  onUpdateTask: (updatedTask: Habit) => void;
 }
 
-export function OneOffTaskCard({
-  task,
-  onLog,
-  onEdit,
-  onUpdateTask,
-}: Props) {
+export function OneOffTaskCard({ task, onEdit, onUpdateTask }: Props) {
   const [isOpen, setIsOpen] = useState(false);
   const [newSubtaskTitle, setNewSubtaskTitle] = useState('');
 
-  const targetDateStr = normalizeDateStr(task.targetDate || task.startDate || new Date());
+  const targetDateStr = taskDateStr(task);
   const targetDate = parseISO(targetDateStr);
   const currentAmt = task.logs[targetDateStr] || 0;
   const today = startOfDay(new Date());
@@ -31,72 +27,46 @@ export function OneOffTaskCard({
   const completedSubtasksCount = subtasks.filter(s => s.completed).length;
   const totalSubtasksCount = subtasks.length;
 
-  const isCompleted = task.type === 'START' ? currentAmt >= task.quota : currentAmt <= task.quota && currentAmt > 0;
+  const isCompleted = isTaskComplete(task);
   const isTargetToday = isSameDay(targetDate, today);
   const isPastDue = isBefore(targetDate, today) && !isCompleted;
 
   const toggleComplete = (e: React.MouseEvent) => {
     e.stopPropagation();
-    if (task.type === 'START') {
-      const nextAmt = isCompleted ? 0 : task.quota;
-      onLog(targetDateStr, nextAmt);
-      if (subtasks.length > 0 && onUpdateTask) {
-        const nextSubtasks = subtasks.map(s => ({ ...s, completed: !isCompleted }));
-        onUpdateTask({ ...task, subtasks: nextSubtasks });
-      }
-    } else {
-      const nextAmt = isCompleted ? task.quota + 1 : 0;
-      onLog(targetDateStr, nextAmt);
-    }
+    onUpdateTask(toggleTaskComplete(task));
   };
 
   const handleAdjust = (e: React.MouseEvent, delta: number) => {
     e.stopPropagation();
-    const nextAmt = Math.max(0, currentAmt + delta);
-    onLog(targetDateStr, nextAmt);
+    onUpdateTask(withLog(task, targetDateStr, Math.max(0, currentAmt + delta)));
   };
 
+  // Ticking every subtask completes a START task; unticking one re-opens it
   const handleToggleSubtask = (subtaskId: string) => {
-    if (!onUpdateTask) return;
     const nextSubtasks = subtasks.map(s =>
       s.id === subtaskId ? { ...s, completed: !s.completed } : s
     );
-    const allDone = nextSubtasks.length > 0 && nextSubtasks.every(s => s.completed);
-
+    let updated: Habit = { ...task, subtasks: nextSubtasks };
     if (task.type === 'START') {
-      if (allDone) {
-        onLog(targetDateStr, task.quota);
+      if (nextSubtasks.every(s => s.completed)) {
+        updated = withLog(updated, targetDateStr, task.quota);
       } else if (isCompleted) {
-        onLog(targetDateStr, 0);
+        updated = withLog(updated, targetDateStr, 0);
       }
     }
-
-    onUpdateTask({
-      ...task,
-      subtasks: nextSubtasks,
-    });
+    onUpdateTask(updated);
   };
 
   const handleDeleteSubtask = (subtaskId: string) => {
-    if (!onUpdateTask) return;
     const nextSubtasks = subtasks.filter(s => s.id !== subtaskId);
-    onUpdateTask({
-      ...task,
-      subtasks: nextSubtasks.length > 0 ? nextSubtasks : undefined,
-    });
+    onUpdateTask({ ...task, subtasks: nextSubtasks.length > 0 ? nextSubtasks : undefined });
   };
 
   const handleAddSubtaskInline = () => {
-    if (!newSubtaskTitle.trim() || !onUpdateTask) return;
-    const newSub: SubTask = {
-      id: Math.random().toString(36).substring(2, 9),
-      title: newSubtaskTitle.trim(),
-      completed: false,
-    };
-    const nextSubtasks = [...subtasks, newSub];
+    if (!newSubtaskTitle.trim()) return;
     onUpdateTask({
       ...task,
-      subtasks: nextSubtasks,
+      subtasks: [...subtasks, { id: generateId(), title: newSubtaskTitle.trim(), completed: false }],
     });
     setNewSubtaskTitle('');
   };

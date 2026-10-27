@@ -47,6 +47,4 @@ export interface Habit {
   subtasks?: SubTask[];
 }
 
-export interface HabitStats {
-  currentStreak: number;
-}
+export type ViewMode = 'day' | 'week' | 'month' | 'year';

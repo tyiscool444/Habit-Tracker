@@ -2,8 +2,8 @@
 
 import React, { createContext, useContext, useState, useEffect, useRef, useCallback } from 'react';
 import { Habit, HabitUnit } from '../types';
-import { normalizeDateStr } from '../lib/habitUtils';
-import { TimerTechnique, getTechniqueById, calculateFlowtimeBreak } from '../lib/timerTechniques';
+import { getLogDateStr, isTimeBasedUnit, roundDown } from '../lib/habitUtils';
+import { TimerTechnique, getTechniqueById, flowtimeBreakFor } from '../lib/timerTechniques';
 import { timerSound } from '../lib/soundUtils';
 
 export type TimerPhaseMode = 'focus' | 'break' | 'longBreak';
@@ -13,7 +13,7 @@ export interface TimerState {
   isRunning: boolean;
   elapsedSeconds: number; // Current interval elapsed seconds
   initialTodayAmount: number; // Logged amount at start of session for activeHabitId
-  startedAt: number | null; // Timestamp
+  startedAt: number | null; // Wall-clock time that elapsedSeconds was last measured from
   // Technique Session Attributes
   techniqueId: string | null;
   mode: TimerPhaseMode;
@@ -22,7 +22,7 @@ export interface TimerState {
   breakSeconds: number;
   longBreakSeconds: number;
   cycle: number;
-  totalFocusSecondsLogged: number; // Accumulated focus seconds logged during this entire session
+  totalFocusSecondsLogged: number; // Focus seconds from completed intervals in this session
 }
 
 export interface StartTechniqueParams {
@@ -33,7 +33,8 @@ export interface StartTechniqueParams {
 }
 
 interface TimerContextValue {
-  timerState: TimerState;
+  isActive: boolean; // a session exists (running or paused)
+  techniqueId: string | null;
   activeHabitId: string | null;
   activeHabit: Habit | null;
   activeTechnique: TimerTechnique | null;
@@ -42,7 +43,7 @@ interface TimerContextValue {
   cycle: number;
   elapsedSeconds: number;
   targetSeconds: number | null;
-  remainingSeconds: number;
+  remainingSeconds: number; // countdown remaining, or elapsed for open-ended sessions
   progressPercent: number; // 0 to 100
   soundEnabled: boolean;
   // Actions
@@ -54,8 +55,6 @@ interface TimerContextValue {
   resetTimer: () => void;
   skipToNextPhase: () => void;
   addSeconds: (seconds: number) => void;
-  formatTime: (totalSeconds: number) => string;
-  isHabitTimerActive: (habitId: string) => boolean;
   toggleSound: () => void;
   takeFlowtimeBreak: () => void;
 }
@@ -63,6 +62,98 @@ interface TimerContextValue {
 const TimerContext = createContext<TimerContextValue | null>(null);
 
 const STORAGE_KEY = 'habitthat_active_timer_v2';
+
+const IDLE_STATE: TimerState = {
+  activeHabitId: null,
+  isRunning: false,
+  elapsedSeconds: 0,
+  initialTodayAmount: 0,
+  startedAt: null,
+  techniqueId: null,
+  mode: 'focus',
+  targetSeconds: null,
+  workSeconds: 25 * 60,
+  breakSeconds: 5 * 60,
+  longBreakSeconds: 20 * 60,
+  cycle: 1,
+  totalFocusSecondsLogged: 0,
+};
+
+function loadSavedState(): TimerState {
+  if (typeof window === 'undefined') return IDLE_STATE;
+  try {
+    const saved = localStorage.getItem(STORAGE_KEY);
+    if (!saved) return IDLE_STATE;
+    const parsed: TimerState = JSON.parse(saved);
+    if (!parsed.activeHabitId && !parsed.techniqueId) return IDLE_STATE;
+    if (parsed.isRunning && parsed.startedAt) {
+      const now = Date.now();
+      parsed.elapsedSeconds += Math.floor((now - parsed.startedAt) / 1000);
+      parsed.startedAt = now;
+    }
+    return parsed;
+  } catch {
+    return IDLE_STATE;
+  }
+}
+
+function secondsToUnitAmount(seconds: number, unit: HabitUnit): number {
+  if (unit === 'minutes') return roundDown(seconds / 60);
+  if (unit === 'hours') return roundDown(seconds / 3600);
+  return 0;
+}
+
+function initialAmountFor(habit: Habit | undefined): number {
+  return habit ? habit.logs[getLogDateStr(habit)] || 0 : 0;
+}
+
+/* ---------- Pure phase transitions ---------- */
+
+/** Banks `focusSeconds` and moves to a break (a long break every N cycles). */
+function toBreak(prev: TimerState, focusSeconds: number, breakSeconds: number, now: number | null): TimerState {
+  const cyclesBeforeLongBreak = getTechniqueById(prev.techniqueId ?? '')?.cyclesBeforeLongBreak || 4;
+  const isLongBreak = prev.cycle % cyclesBeforeLongBreak === 0;
+  return {
+    ...prev,
+    mode: isLongBreak ? 'longBreak' : 'break',
+    targetSeconds: isLongBreak ? prev.longBreakSeconds : breakSeconds,
+    elapsedSeconds: 0,
+    totalFocusSecondsLogged: prev.totalFocusSecondsLogged + focusSeconds,
+    startedAt: now,
+  };
+}
+
+function toFocus(prev: TimerState, now: number | null): TimerState {
+  return {
+    ...prev,
+    mode: 'focus',
+    cycle: prev.cycle + 1,
+    // Open-ended sessions (Flowtime) have no work length to count down
+    targetSeconds: prev.workSeconds > 0 ? prev.workSeconds : null,
+    elapsedSeconds: 0,
+    startedAt: now,
+  };
+}
+
+/** Advances the clock by real elapsed wall time so throttled background tabs stay accurate. */
+function tick(prev: TimerState, now: number): TimerState {
+  if (!prev.isRunning) return prev;
+
+  const startedAt = prev.startedAt ?? now - 1000;
+  const deltaSec = Math.min(60, Math.round((now - startedAt) / 1000));
+  if (deltaSec <= 0) return prev;
+  const elapsed = prev.elapsedSeconds + deltaSec;
+
+  if (prev.targetSeconds === null || elapsed < prev.targetSeconds) {
+    return { ...prev, elapsedSeconds: elapsed, startedAt: startedAt + deltaSec * 1000 };
+  }
+  if (prev.mode !== 'focus') return toFocus(prev, now);
+  if (prev.breakSeconds > 0) return toBreak(prev, prev.targetSeconds, prev.breakSeconds, now);
+  // Techniques without a break (e.g. 2-minute rule) stop when focus completes
+  return { ...prev, isRunning: false, elapsedSeconds: prev.targetSeconds, startedAt: null };
+}
+
+/* ---------- Provider ---------- */
 
 export function TimerProvider({
   children,
@@ -73,54 +164,19 @@ export function TimerProvider({
   habits: Habit[];
   setLog: (habitId: string, dateStr: string, amount: number) => void;
 }) {
-  const [soundEnabled, setSoundEnabledState] = useState<boolean>(() => {
-    return timerSound.isEnabled();
-  });
-
-  const [timerState, setTimerState] = useState<TimerState>(() => {
-    if (typeof window !== 'undefined') {
-      try {
-        const saved = localStorage.getItem(STORAGE_KEY);
-        if (saved) {
-          const parsed: TimerState = JSON.parse(saved);
-          if (parsed.activeHabitId || parsed.techniqueId) {
-            if (parsed.isRunning && parsed.startedAt) {
-              const now = Date.now();
-              const additionalSec = Math.floor((now - parsed.startedAt) / 1000);
-              parsed.elapsedSeconds += additionalSec;
-              parsed.startedAt = now;
-            }
-            return parsed;
-          }
-        }
-      } catch {
-        // Fallback for corrupted timer state
-      }
-    }
-    return {
-      activeHabitId: null,
-      isRunning: false,
-      elapsedSeconds: 0,
-      initialTodayAmount: 0,
-      startedAt: null,
-      techniqueId: null,
-      mode: 'focus',
-      targetSeconds: null,
-      workSeconds: 25 * 60,
-      breakSeconds: 5 * 60,
-      longBreakSeconds: 20 * 60,
-      cycle: 1,
-      totalFocusSecondsLogged: 0,
-    };
-  });
+  const [soundEnabled, setSoundEnabled] = useState(() => timerSound.isEnabled());
+  const [timerState, setTimerState] = useState<TimerState>(loadSavedState);
 
   const habitsRef = useRef(habits);
   const setLogRef = useRef(setLog);
+  const prevStateRef = useRef(timerState);
 
   useEffect(() => {
     habitsRef.current = habits;
     setLogRef.current = setLog;
   }, [habits, setLog]);
+
+  const isActive = Boolean(timerState.activeHabitId || timerState.techniqueId);
 
   // Persist timer state to localStorage
   useEffect(() => {
@@ -135,135 +191,56 @@ export function TimerProvider({
     }
   }, [timerState]);
 
-  // Convert elapsed seconds into the habit's unit value (only applies to minute and hourly habits)
-  const convertSecondsToUnitAmount = useCallback((seconds: number, unit: HabitUnit): number => {
-    switch (unit) {
-      case 'minutes':
-        return Math.floor(((seconds / 60) + 1e-9) * 100) / 100;
-      case 'hours':
-        return Math.floor(((seconds / 3600) + 1e-9) * 100) / 100;
-      default:
-        return 0;
-    }
-  }, []);
-
-  // Sync with habit log (only applies to minute/hourly habits)
-  const syncToHabitLog = useCallback((habitId: string, focusSec: number, baseAmount: number) => {
-    const habit = habitsRef.current.find(h => h.id === habitId);
-    if (!habit) return;
-    if (habit.unit !== 'hours' && habit.unit !== 'minutes') return;
-
-    const logDateStr = habit.isRecurring === false
-      ? (habit.targetDate || habit.startDate || normalizeDateStr(new Date()))
-      : normalizeDateStr(new Date());
-
-    const addedAmount = convertSecondsToUnitAmount(focusSec, habit.unit);
-    const newTotal = Math.floor(((baseAmount + addedAmount) + 1e-9) * 100) / 100;
-
-    setLogRef.current(habitId, logDateStr, newTotal);
-  }, [convertSecondsToUnitAmount]);
-
-  // Main 1-second ticker loop with wall-clock drift compensation
+  // Mirror the session's focus time into the linked habit's log (minute/hour habits only)
   useEffect(() => {
-    if (!timerState.isRunning || (!timerState.activeHabitId && !timerState.techniqueId)) return;
+    const { activeHabitId, mode, elapsedSeconds, totalFocusSecondsLogged, initialTodayAmount } = timerState;
+    if (!activeHabitId) return;
+    const habit = habitsRef.current.find(h => h.id === activeHabitId);
+    if (!habit || !isTimeBasedUnit(habit.unit)) return;
 
-    const interval = setInterval(() => {
-      setTimerState(prev => {
-        if (!prev.isRunning) return prev;
+    const focusSeconds = totalFocusSecondsLogged + (mode === 'focus' ? elapsedSeconds : 0);
+    const amount = roundDown(initialTodayAmount + secondsToUnitAmount(focusSeconds, habit.unit));
+    const dateStr = getLogDateStr(habit);
+    if ((habit.logs[dateStr] || 0) !== amount) {
+      setLogRef.current(activeHabitId, dateStr, amount);
+    }
+  }, [timerState]);
 
-        const now = Date.now();
-        // Calculate real elapsed delta to prevent tab-throttle lag
-        const deltaSec = prev.startedAt ? Math.max(1, Math.min(60, Math.floor((now - prev.startedAt) / 1000))) : 1;
-        const nextElapsed = prev.elapsedSeconds + deltaSec;
-        const activeTechnique = prev.techniqueId ? getTechniqueById(prev.techniqueId) : null;
+  // Chime whenever a phase finishes
+  useEffect(() => {
+    const prev = prevStateRef.current;
+    prevStateRef.current = timerState;
+    const wasFocus = prev.mode === 'focus';
+    const isFocus = timerState.mode === 'focus';
+    const focusFinishedWithoutBreak = isFocus && prev.isRunning && !timerState.isRunning
+      && timerState.targetSeconds !== null && timerState.elapsedSeconds >= timerState.targetSeconds;
 
-        // If in focus mode, sync focus time to habit
-        if (prev.mode === 'focus' && prev.activeHabitId) {
-          const totalFocusSec = prev.totalFocusSecondsLogged + nextElapsed;
-          syncToHabitLog(prev.activeHabitId, totalFocusSec, prev.initialTodayAmount);
-        }
+    if ((wasFocus && !isFocus) || focusFinishedWithoutBreak) {
+      timerSound.playFocusComplete();
+    } else if (!wasFocus && isFocus && timerState.cycle > prev.cycle) {
+      timerSound.playBreakComplete();
+    }
+  }, [timerState]);
 
-        // Check if countdown target has completed (for non-flowtime / bounded intervals)
-        if (prev.targetSeconds !== null && nextElapsed >= prev.targetSeconds) {
-          if (prev.mode === 'focus') {
-            // Focus period completed!
-            timerSound.playFocusComplete();
-
-            const accumulatedFocus = prev.totalFocusSecondsLogged + prev.targetSeconds;
-            if (prev.activeHabitId) {
-              syncToHabitLog(prev.activeHabitId, accumulatedFocus, prev.initialTodayAmount);
-            }
-
-            const cyclesBeforeLongBreak = activeTechnique?.cyclesBeforeLongBreak || 4;
-            const isLongBreak = prev.cycle % cyclesBeforeLongBreak === 0;
-            const hasBreak = (prev.breakSeconds > 0);
-
-            if (hasBreak) {
-              return {
-                ...prev,
-                mode: isLongBreak ? 'longBreak' : 'break',
-                targetSeconds: isLongBreak ? prev.longBreakSeconds : prev.breakSeconds,
-                elapsedSeconds: 0,
-                totalFocusSecondsLogged: accumulatedFocus,
-                startedAt: now,
-              };
-            } else {
-              // Techniques without break (e.g. 2-minute kickstart) complete and pause
-              return {
-                ...prev,
-                isRunning: false,
-                elapsedSeconds: prev.targetSeconds,
-                totalFocusSecondsLogged: accumulatedFocus,
-                startedAt: null,
-              };
-            }
-          } else {
-            // Break period completed!
-            timerSound.playBreakComplete();
-
-            return {
-              ...prev,
-              mode: 'focus',
-              cycle: prev.cycle + 1,
-              targetSeconds: prev.workSeconds,
-              elapsedSeconds: 0,
-              startedAt: now,
-            };
-          }
-        }
-
-        return {
-          ...prev,
-          elapsedSeconds: nextElapsed,
-          startedAt: now,
-        };
-      });
-    }, 1000);
-
+  // Main 1-second ticker
+  useEffect(() => {
+    if (!timerState.isRunning || !isActive) return;
+    const interval = setInterval(() => setTimerState(prev => tick(prev, Date.now())), 1000);
     return () => clearInterval(interval);
-  }, [timerState.isRunning, timerState.activeHabitId, timerState.techniqueId, syncToHabitLog]);
+  }, [timerState.isRunning, isActive]);
 
   // Start classic habit stopwatch timer
   const startTimer = useCallback((habit: Habit) => {
-    const logDateStr = habit.isRecurring === false
-      ? (habit.targetDate || habit.startDate || normalizeDateStr(new Date()))
-      : normalizeDateStr(new Date());
-    const currentTodayAmount = habit.logs[logDateStr] || 0;
-
     setTimerState({
+      ...IDLE_STATE,
       activeHabitId: habit.id,
       isRunning: true,
-      elapsedSeconds: 0,
-      initialTodayAmount: currentTodayAmount,
+      initialTodayAmount: initialAmountFor(habit),
       startedAt: Date.now(),
       techniqueId: 'custom',
-      mode: 'focus',
-      targetSeconds: null,
       workSeconds: 0,
       breakSeconds: 0,
       longBreakSeconds: 0,
-      cycle: 1,
-      totalFocusSecondsLogged: 0,
     });
   }, []);
 
@@ -278,221 +255,96 @@ export function TimerProvider({
     const breakMin = customBreakMinutes ?? technique.breakMinutes;
     const longBreakMin = technique.longBreakMinutes ?? Math.max(15, breakMin * 3);
 
-    let initialToday = 0;
-    if (habitId) {
-      const h = habitsRef.current.find(item => item.id === habitId);
-      if (h) {
-        const logDateStr = h.isRecurring === false
-          ? (h.targetDate || h.startDate || normalizeDateStr(new Date()))
-          : normalizeDateStr(new Date());
-        initialToday = h.logs[logDateStr] || 0;
-      }
-    }
-
     timerSound.playClick();
-
     setTimerState({
+      ...IDLE_STATE,
       activeHabitId: habitId,
       isRunning: true,
-      elapsedSeconds: 0,
-      initialTodayAmount: initialToday,
+      initialTodayAmount: initialAmountFor(habitsRef.current.find(h => h.id === habitId)),
       startedAt: Date.now(),
       techniqueId: technique.id,
-      mode: 'focus',
       targetSeconds: technique.isFlowtime ? null : workMin * 60,
       workSeconds: workMin * 60,
       breakSeconds: breakMin * 60,
       longBreakSeconds: longBreakMin * 60,
-      cycle: 1,
-      totalFocusSecondsLogged: 0,
     });
   }, []);
 
   const pauseTimer = useCallback(() => {
-    setTimerState(prev => ({
-      ...prev,
-      isRunning: false,
-      startedAt: null,
-    }));
+    setTimerState(prev => ({ ...prev, isRunning: false, startedAt: null }));
   }, []);
 
   const resumeTimer = useCallback(() => {
+    setTimerState(prev => ({ ...prev, isRunning: true, startedAt: Date.now() }));
+  }, []);
+
+  // Focus time is already in the habit log, so stopping just ends the session
+  const stopTimer = useCallback(() => {
+    setTimerState(IDLE_STATE);
+  }, []);
+
+  // Restart the current interval (the habit log falls back to the banked total)
+  const resetTimer = useCallback(() => {
     setTimerState(prev => ({
       ...prev,
-      isRunning: true,
-      startedAt: Date.now(),
+      elapsedSeconds: 0,
+      startedAt: prev.isRunning ? Date.now() : null,
     }));
   }, []);
 
-  const stopTimer = useCallback(() => {
-    if (timerState.activeHabitId) {
-      const additionalFocus = timerState.mode === 'focus' ? timerState.elapsedSeconds : 0;
-      const totalFocus = timerState.totalFocusSecondsLogged + additionalFocus;
-      syncToHabitLog(timerState.activeHabitId, totalFocus, timerState.initialTodayAmount);
-    }
-    setTimerState({
-      activeHabitId: null,
-      isRunning: false,
-      elapsedSeconds: 0,
-      initialTodayAmount: 0,
-      startedAt: null,
-      techniqueId: null,
-      mode: 'focus',
-      targetSeconds: null,
-      workSeconds: 25 * 60,
-      breakSeconds: 5 * 60,
-      longBreakSeconds: 20 * 60,
-      cycle: 1,
-      totalFocusSecondsLogged: 0,
-    });
-    localStorage.removeItem(STORAGE_KEY);
-  }, [timerState, syncToHabitLog]);
-
-  const resetTimer = useCallback(() => {
-    setTimerState(prev => {
-      // Revert habit sync back to previously logged cycle total
-      if (prev.mode === 'focus' && prev.activeHabitId) {
-        syncToHabitLog(prev.activeHabitId, prev.totalFocusSecondsLogged, prev.initialTodayAmount);
-      }
-      return {
-        ...prev,
-        elapsedSeconds: 0,
-        startedAt: prev.isRunning ? Date.now() : null,
-      };
-    });
-  }, [syncToHabitLog]);
-
   const skipToNextPhase = useCallback(() => {
     setTimerState(prev => {
-      const activeTechnique = prev.techniqueId ? getTechniqueById(prev.techniqueId) : null;
-      if (prev.mode === 'focus') {
-        timerSound.playFocusComplete();
-        const focusDuration = prev.targetSeconds ? Math.min(prev.elapsedSeconds, prev.targetSeconds) : prev.elapsedSeconds;
-        const accumulatedFocus = prev.totalFocusSecondsLogged + focusDuration;
-        if (prev.activeHabitId) {
-          syncToHabitLog(prev.activeHabitId, accumulatedFocus, prev.initialTodayAmount);
-        }
-
-        const cyclesBeforeLongBreak = activeTechnique?.cyclesBeforeLongBreak || 4;
-        const isLongBreak = prev.cycle % cyclesBeforeLongBreak === 0;
-
-        return {
-          ...prev,
-          mode: isLongBreak ? 'longBreak' : 'break',
-          targetSeconds: isLongBreak ? prev.longBreakSeconds : (prev.breakSeconds || 5 * 60),
-          elapsedSeconds: 0,
-          totalFocusSecondsLogged: accumulatedFocus,
-          startedAt: prev.isRunning ? Date.now() : null,
-        };
-      } else {
-        timerSound.playBreakComplete();
-        return {
-          ...prev,
-          mode: 'focus',
-          cycle: prev.cycle + 1,
-          targetSeconds: prev.workSeconds,
-          elapsedSeconds: 0,
-          startedAt: prev.isRunning ? Date.now() : null,
-        };
-      }
+      const now = prev.isRunning ? Date.now() : null;
+      if (prev.mode !== 'focus') return toFocus(prev, now);
+      const focusSeconds = prev.targetSeconds ? Math.min(prev.elapsedSeconds, prev.targetSeconds) : prev.elapsedSeconds;
+      return toBreak(prev, focusSeconds, prev.breakSeconds || 5 * 60, now);
     });
-  }, [syncToHabitLog]);
-
-  const takeFlowtimeBreak = useCallback(() => {
-    setTimerState(prev => {
-      const focusMins = Math.max(1, Math.round(prev.elapsedSeconds / 60));
-      const breakMins = calculateFlowtimeBreak(focusMins);
-      timerSound.playFocusComplete();
-
-      const accumulated = prev.totalFocusSecondsLogged + prev.elapsedSeconds;
-      if (prev.activeHabitId) {
-        syncToHabitLog(prev.activeHabitId, accumulated, prev.initialTodayAmount);
-      }
-
-      return {
-        ...prev,
-        mode: 'break',
-        targetSeconds: breakMins * 60,
-        elapsedSeconds: 0,
-        totalFocusSecondsLogged: accumulated,
-        startedAt: prev.isRunning ? Date.now() : null,
-      };
-    });
-  }, [syncToHabitLog]);
-
-  // Add seconds: extends countdown target when targetSeconds exists, or adds elapsed time in stopwatch
-  const addSeconds = useCallback((additionalSec: number) => {
-    setTimerState(prev => {
-      if (prev.targetSeconds !== null) {
-        const newTarget = Math.max(prev.elapsedSeconds + 1, prev.targetSeconds + additionalSec);
-        return {
-          ...prev,
-          targetSeconds: newTarget,
-        };
-      } else {
-        const newSec = Math.max(0, prev.elapsedSeconds + additionalSec);
-        if (prev.mode === 'focus' && prev.activeHabitId) {
-          syncToHabitLog(prev.activeHabitId, prev.totalFocusSecondsLogged + newSec, prev.initialTodayAmount);
-        }
-        return {
-          ...prev,
-          elapsedSeconds: newSec,
-        };
-      }
-    });
-  }, [syncToHabitLog]);
-
-  const formatTime = useCallback((totalSeconds: number): string => {
-    const hrs = Math.floor(totalSeconds / 3600);
-    const mins = Math.floor((totalSeconds % 3600) / 60);
-    const secs = totalSeconds % 60;
-
-    const pad = (n: number) => n.toString().padStart(2, '0');
-
-    if (hrs > 0) {
-      return `${pad(hrs)}:${pad(mins)}:${pad(secs)}`;
-    }
-    return `${pad(mins)}:${pad(secs)}`;
   }, []);
 
-  const isHabitTimerActive = useCallback((habitId: string) => {
-    return timerState.activeHabitId === habitId && timerState.isRunning;
-  }, [timerState.activeHabitId, timerState.isRunning]);
+  const takeFlowtimeBreak = useCallback(() => {
+    setTimerState(prev => ({
+      ...prev,
+      mode: 'break',
+      targetSeconds: flowtimeBreakFor(prev.elapsedSeconds) * 60,
+      elapsedSeconds: 0,
+      totalFocusSecondsLogged: prev.totalFocusSecondsLogged + prev.elapsedSeconds,
+      startedAt: prev.isRunning ? Date.now() : null,
+    }));
+  }, []);
+
+  // Extends the countdown when there is one, otherwise adds stopwatch time
+  const addSeconds = useCallback((additionalSec: number) => {
+    setTimerState(prev => prev.targetSeconds !== null
+      ? { ...prev, targetSeconds: Math.max(prev.elapsedSeconds + 1, prev.targetSeconds + additionalSec) }
+      : { ...prev, elapsedSeconds: Math.max(0, prev.elapsedSeconds + additionalSec) });
+  }, []);
 
   const toggleSound = useCallback(() => {
-    const nextVal = !soundEnabled;
-    setSoundEnabledState(nextVal);
-    timerSound.setEnabled(nextVal);
-  }, [soundEnabled]);
+    setSoundEnabled(prev => {
+      timerSound.setEnabled(!prev);
+      return !prev;
+    });
+  }, []);
 
-  const activeHabit = habits.find(h => h.id === timerState.activeHabitId) || null;
-  const activeTechnique = timerState.techniqueId ? getTechniqueById(timerState.techniqueId) || null : null;
-
-  // Calculate remaining seconds and progress percentage
-  const remainingSeconds = timerState.targetSeconds !== null
-    ? Math.max(0, timerState.targetSeconds - timerState.elapsedSeconds)
-    : timerState.elapsedSeconds;
-
-  let progressPercent = 0;
-  if (timerState.targetSeconds !== null && timerState.targetSeconds > 0) {
-    progressPercent = Math.min(100, Math.round((timerState.elapsedSeconds / timerState.targetSeconds) * 100));
-  } else {
-    // For flowtime / stopwatch, pulse or show minute progress
-    progressPercent = (timerState.elapsedSeconds % 60) / 60 * 100;
-  }
+  const { elapsedSeconds, targetSeconds } = timerState;
+  const remainingSeconds = targetSeconds !== null ? Math.max(0, targetSeconds - elapsedSeconds) : elapsedSeconds;
+  const progressPercent = targetSeconds !== null && targetSeconds > 0
+    ? Math.min(100, Math.round((elapsedSeconds / targetSeconds) * 100))
+    : (elapsedSeconds % 60) / 60 * 100; // open-ended: sweep once per minute
 
   return (
     <TimerContext.Provider
       value={{
-        timerState,
+        isActive,
+        techniqueId: timerState.techniqueId,
         activeHabitId: timerState.activeHabitId,
-        activeHabit,
-        activeTechnique,
+        activeHabit: habits.find(h => h.id === timerState.activeHabitId) || null,
+        activeTechnique: timerState.techniqueId ? getTechniqueById(timerState.techniqueId) || null : null,
         isRunning: timerState.isRunning,
         mode: timerState.mode,
         cycle: timerState.cycle,
-        elapsedSeconds: timerState.elapsedSeconds,
-        targetSeconds: timerState.targetSeconds,
+        elapsedSeconds,
+        targetSeconds,
         remainingSeconds,
         progressPercent,
         soundEnabled,
@@ -504,8 +356,6 @@ export function TimerProvider({
         resetTimer,
         skipToNextPhase,
         addSeconds,
-        formatTime,
-        isHabitTimerActive,
         toggleSound,
         takeFlowtimeBreak,
       }}

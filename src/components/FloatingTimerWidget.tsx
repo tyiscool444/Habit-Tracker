@@ -1,45 +1,35 @@
 'use client';
 
-import React from 'react';
 import { useHabitTimer } from '../context/TimerContext';
-import { Habit } from '../types';
 import { unitLabel } from '../lib/habitUtils';
+import { formatTime } from '../lib/timerTechniques';
 import { Play, Pause, Square, ExternalLink } from 'lucide-react';
 
 interface Props {
-  habits: Habit[];
   onOpenInsights: (habitId: string) => void;
   onOpenTimers?: () => void;
 }
 
-export function FloatingTimerWidget({ habits, onOpenInsights, onOpenTimers }: Props) {
+export function FloatingTimerWidget({ onOpenInsights, onOpenTimers }: Props) {
   const {
-    timerState,
-    activeHabitId,
-    activeHabit,
-    activeTechnique,
+    isActive,
+    activeHabit: habit,
+    activeTechnique: technique,
     isRunning,
     mode,
     remainingSeconds,
-    elapsedSeconds,
-    targetSeconds,
     pauseTimer,
     resumeTimer,
     stopTimer,
-    formatTime,
   } = useHabitTimer();
 
-  const isAnyTimerActive = Boolean(activeHabitId || timerState.techniqueId);
-  if (!isAnyTimerActive) return null;
+  if (!isActive) return null;
 
-  const habit = activeHabit || (activeHabitId ? habits.find(h => h.id === activeHabitId) : null);
-  const technique = activeTechnique;
-  const themeColor = technique?.color || (habit?.color || '#06b6d4');
-  const displayEmoji = technique?.emoji || (habit?.icon || '⏱️');
-  const title = habit ? habit.name : (technique ? technique.shortName : 'Focus Session');
-
-  // Display countdown if bounded interval, else elapsed
-  const displayTime = targetSeconds !== null ? formatTime(remainingSeconds) : formatTime(elapsedSeconds);
+  const themeColor = technique?.color || habit?.color || '#06b6d4';
+  const displayEmoji = technique?.emoji || habit?.icon || '⏱️';
+  const title = habit?.name || technique?.shortName || 'Focus Session';
+  const displayTime = formatTime(remainingSeconds); // countdown, or elapsed when open-ended
+  const isBreak = mode === 'break' || mode === 'longBreak';
 
   const handleOpen = () => {
     if (onOpenTimers) {
@@ -96,11 +86,11 @@ export function FloatingTimerWidget({ habits, onOpenInsights, onOpenTimers }: Pr
               {displayTime}
             </span>
             <span className={`text-[9px] font-bold px-1.5 py-0.2 rounded uppercase ${
-              mode === 'break' || mode === 'longBreak'
+              isBreak
                 ? 'bg-amber-500/20 text-amber-300'
                 : (isRunning ? 'bg-emerald-500/20 text-emerald-300' : 'bg-gray-800 text-gray-400')
             }`}>
-              {mode === 'break' || mode === 'longBreak' ? 'BREAK' : (isRunning ? 'FOCUS' : 'PAUSED')}
+              {isBreak ? 'BREAK' : (isRunning ? 'FOCUS' : 'PAUSED')}
             </span>
           </div>
         </div>

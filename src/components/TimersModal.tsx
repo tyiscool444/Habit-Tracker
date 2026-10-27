@@ -1,13 +1,10 @@
 'use client';
 
-import React, { useState, useMemo } from 'react';
+import { useState, useMemo } from 'react';
 import { Habit } from '../types';
 import { useHabitTimer } from '../context/TimerContext';
-import {
-  STUDY_TIMER_TECHNIQUES,
-  TimerTechnique,
-  calculateFlowtimeBreak,
-} from '../lib/timerTechniques';
+import { STUDY_TIMER_TECHNIQUES, TimerTechnique, flowtimeBreakFor, formatTime } from '../lib/timerTechniques';
+import { isTimeBasedUnit, unitLabel } from '../lib/habitUtils';
 import {
   Timer, X, Play, Pause, RotateCcw, SkipForward, Square,
   Volume2, VolumeX, Coffee, Sparkles, Check,
@@ -21,7 +18,8 @@ interface Props {
 
 export function TimersModal({ habits, onClose }: Props) {
   const {
-    timerState,
+    isActive: isAnyTimerActive,
+    techniqueId,
     activeHabitId,
     activeHabit,
     activeTechnique,
@@ -40,7 +38,6 @@ export function TimersModal({ habits, onClose }: Props) {
     resetTimer,
     skipToNextPhase,
     addSeconds,
-    formatTime,
     toggleSound,
     takeFlowtimeBreak,
   } = useHabitTimer();
@@ -51,17 +48,13 @@ export function TimersModal({ habits, onClose }: Props) {
   const [customWorkMins, setCustomWorkMins] = useState<number>(30);
   const [customBreakMins, setCustomBreakMins] = useState<number>(5);
 
-  // Filter habits strictly to minute and hourly habits only
-  const timeBasedHabits = useMemo(() => {
-    return habits.filter(h => h.unit === 'hours' || h.unit === 'minutes');
-  }, [habits]);
+  const timeBasedHabits = useMemo(() => habits.filter(h => isTimeBasedUnit(h.unit)), [habits]);
 
   // Open the habit link prompt for a chosen technique
   const handleCardClick = (technique: TimerTechnique) => {
     setSelectedTechnique(technique);
-    // If currently active habit is time-based, keep it selected, else null
-    const isActiveHabitTimeBased = activeHabit && (activeHabit.unit === 'hours' || activeHabit.unit === 'minutes');
-    setChosenHabitId(isActiveHabitTimeBased ? activeHabitId : null);
+    // Keep the currently linked habit selected if it can receive time
+    setChosenHabitId(activeHabit && isTimeBasedUnit(activeHabit.unit) ? activeHabitId : null);
     if (technique.isCustom) {
       setCustomWorkMins(technique.workMinutes || 30);
       setCustomBreakMins(technique.breakMinutes || 5);
@@ -82,12 +75,8 @@ export function TimersModal({ habits, onClose }: Props) {
     setSelectedTechnique(null);
   };
 
-  const isAnyTimerActive = Boolean(timerState.activeHabitId || timerState.techniqueId);
   const isTechniqueRunning = isAnyTimerActive && isRunning;
-
-  // Active technique display attributes
-  const currentTechnique = activeTechnique || (timerState.techniqueId ? STUDY_TIMER_TECHNIQUES.find(t => t.id === timerState.techniqueId) : null);
-  const themeColor = currentTechnique?.color || (activeHabit?.color || '#06b6d4');
+  const themeColor = activeTechnique?.color || activeHabit?.color || '#06b6d4';
 
   // SVG circular countdown progress dimensions
   const radius = 64;
@@ -216,69 +205,22 @@ export function TimersModal({ habits, onClose }: Props) {
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <div className="flex items-center justify-between text-xs">
-                    <span className="font-semibold text-gray-300">Focus Duration:</span>
-                    <span className="font-mono font-bold text-pink-400">{customWorkMins} min</span>
-                  </div>
-                  <input
-                    type="range"
-                    min={1}
-                    max={120}
-                    step={1}
-                    value={customWorkMins}
-                    onChange={(e) => setCustomWorkMins(parseInt(e.target.value) || 25)}
-                    className="w-full accent-pink-500 cursor-pointer"
-                  />
-                  <div className="flex gap-1.5 flex-wrap">
-                    {[15, 25, 30, 45, 60, 90].map((m) => (
-                      <button
-                        key={m}
-                        type="button"
-                        onClick={() => setCustomWorkMins(m)}
-                        className={`px-2 py-0.5 rounded-lg text-[10px] font-bold border transition ${
-                          customWorkMins === m 
-                            ? 'bg-pink-500 text-white border-pink-400' 
-                            : 'bg-gray-800/80 text-gray-400 border-gray-700 hover:text-white'
-                        }`}
-                      >
-                        {m}m
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                <div className="space-y-2">
-                  <div className="flex items-center justify-between text-xs">
-                    <span className="font-semibold text-gray-300">Break Duration:</span>
-                    <span className="font-mono font-bold text-pink-400">{customBreakMins} min</span>
-                  </div>
-                  <input
-                    type="range"
-                    min={0}
-                    max={30}
-                    step={1}
-                    value={customBreakMins}
-                    onChange={(e) => setCustomBreakMins(parseInt(e.target.value) || 5)}
-                    className="w-full accent-pink-500 cursor-pointer"
-                  />
-                  <div className="flex gap-1.5 flex-wrap">
-                    {[0, 3, 5, 10, 15].map((m) => (
-                      <button
-                        key={m}
-                        type="button"
-                        onClick={() => setCustomBreakMins(m)}
-                        className={`px-2 py-0.5 rounded-lg text-[10px] font-bold border transition ${
-                          customBreakMins === m 
-                            ? 'bg-pink-500 text-white border-pink-400' 
-                            : 'bg-gray-800/80 text-gray-400 border-gray-700 hover:text-white'
-                        }`}
-                      >
-                        {m === 0 ? 'No Break' : `${m}m`}
-                      </button>
-                    ))}
-                  </div>
-                </div>
+                <DurationControl
+                  label="Focus Duration"
+                  value={customWorkMins}
+                  onChange={setCustomWorkMins}
+                  min={1}
+                  max={120}
+                  presets={[15, 25, 30, 45, 60, 90]}
+                />
+                <DurationControl
+                  label="Break Duration"
+                  value={customBreakMins}
+                  onChange={setCustomBreakMins}
+                  min={0}
+                  max={30}
+                  presets={[0, 3, 5, 10, 15]}
+                />
               </div>
             </div>
           )}
@@ -478,10 +420,10 @@ export function TimersModal({ habits, onClose }: Props) {
                   {/* Session Info & Technique Badges */}
                   <div className="space-y-1.5">
                     <div className="flex items-center gap-2">
-                      <span className="text-2xl">{currentTechnique?.emoji || '⏱️'}</span>
+                      <span className="text-2xl">{activeTechnique?.emoji || '⏱️'}</span>
                       <div>
                         <h3 className="text-base sm:text-lg font-black text-white leading-tight">
-                          {currentTechnique?.shortName || activeHabit?.name || 'Active Focus Session'}
+                          {activeTechnique?.shortName || activeHabit?.name || 'Active Focus Session'}
                         </h3>
                         <div className="flex items-center gap-2 mt-0.5">
                           <span className={`text-[10px] font-bold px-2 py-0.5 rounded-md ${
@@ -503,7 +445,7 @@ export function TimersModal({ habits, onClose }: Props) {
                       <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-blue-500/10 border border-blue-500/20 text-blue-300 text-xs font-semibold">
                         <span>{activeHabit.icon}</span>
                         <span>Logging to: <strong className="text-white">{activeHabit.name}</strong></span>
-                        <span className="text-[11px] text-blue-400 font-mono">({activeHabit.quota} {habitUnitShort(activeHabit.unit)}/{activeHabit.timeframe})</span>
+                        <span className="text-[11px] text-blue-400 font-mono">({activeHabit.quota} {unitLabel(activeHabit.unit)}/{activeHabit.timeframe})</span>
                       </div>
                     ) : (
                       <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-xl bg-gray-800/80 border border-gray-700/60 text-gray-400 text-xs font-medium">
@@ -513,7 +455,7 @@ export function TimersModal({ habits, onClose }: Props) {
                     )}
 
                     {/* Flowtime Proportional Break Button */}
-                    {currentTechnique?.isFlowtime && mode === 'focus' && (
+                    {activeTechnique?.isFlowtime && mode === 'focus' && (
                       <div className="pt-1">
                         <button
                           type="button"
@@ -521,7 +463,7 @@ export function TimersModal({ habits, onClose }: Props) {
                           className="px-3 py-1.5 rounded-xl bg-emerald-600/20 hover:bg-emerald-600/30 border border-emerald-500/40 text-emerald-300 text-xs font-bold transition flex items-center gap-1.5 shadow-sm active:scale-95"
                         >
                           <Coffee size={14} />
-                          <span>Take Break ({calculateFlowtimeBreak(Math.max(1, Math.round(elapsedSeconds / 60)))}m recommended)</span>
+                          <span>Take Break ({flowtimeBreakFor(elapsedSeconds)}m recommended)</span>
                         </button>
                       </div>
                     )}
@@ -617,8 +559,8 @@ export function TimersModal({ habits, onClose }: Props) {
           {/* Grid of Uniform Cards */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {STUDY_TIMER_TECHNIQUES.map((tech) => {
-              const isThisRunning = timerState.techniqueId === tech.id && isRunning;
-              const isThisSelected = timerState.techniqueId === tech.id;
+              const isThisRunning = techniqueId === tech.id && isRunning;
+              const isThisSelected = techniqueId === tech.id;
 
               return (
                 <div
@@ -710,12 +652,45 @@ export function TimersModal({ habits, onClose }: Props) {
   );
 }
 
-function habitUnitShort(unit: string) {
-  switch (unit) {
-    case 'hours': return 'hr';
-    case 'minutes': return 'min';
-    case 'seconds': return 'sec';
-    case 'amount': return 'x';
-    default: return unit;
-  }
+function DurationControl({ label, value, onChange, min, max, presets }: {
+  label: string;
+  value: number;
+  onChange: (minutes: number) => void;
+  min: number;
+  max: number;
+  presets: number[];
+}) {
+  return (
+    <div className="space-y-2">
+      <div className="flex items-center justify-between text-xs">
+        <span className="font-semibold text-gray-300">{label}:</span>
+        <span className="font-mono font-bold text-pink-400">{value} min</span>
+      </div>
+      <input
+        type="range"
+        min={min}
+        max={max}
+        step={1}
+        value={value}
+        onChange={(e) => onChange(parseInt(e.target.value, 10))}
+        className="w-full accent-pink-500 cursor-pointer"
+      />
+      <div className="flex gap-1.5 flex-wrap">
+        {presets.map((m) => (
+          <button
+            key={m}
+            type="button"
+            onClick={() => onChange(m)}
+            className={`px-2 py-0.5 rounded-lg text-[10px] font-bold border transition ${
+              value === m
+                ? 'bg-pink-500 text-white border-pink-400'
+                : 'bg-gray-800/80 text-gray-400 border-gray-700 hover:text-white'
+            }`}
+          >
+            {m === 0 ? 'No Break' : `${m}m`}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
 }
