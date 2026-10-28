@@ -2,13 +2,15 @@
 
 import { useMemo, useState } from 'react';
 import { Habit } from '../types';
+import { usePlanner } from '../context/PlannerContext';
+import { formatClock, getDaySegments } from '../lib/plannerUtils';
 import {
   normalizeDateStr, timeframeSuffix, WEEK_OPTIONS,
   taskDateStr, isTaskComplete, isHabitMetOn, getTrackingStart, toggleTaskComplete,
 } from '../lib/habitUtils';
 import {
-  X, ChevronLeft, ChevronRight, Flame, Trophy, CalendarDays, Target,
-  Check, AlertTriangle, Clock, ArrowRight,
+  ChevronLeft, ChevronRight, Flame, Trophy, CalendarDays, Target,
+  Check, AlertTriangle, Clock, ArrowRight, NotebookPen,
 } from 'lucide-react';
 import {
   format, parseISO, startOfMonth, endOfMonth, startOfWeek, endOfWeek, addDays,
@@ -18,7 +20,6 @@ import {
 
 interface Props {
   habits: Habit[];
-  onClose: () => void;
   onEditTask: (id: string) => void;
   onUpdateTask: (task: Habit) => void;
   onGoToDate: (date: Date) => void;
@@ -55,7 +56,8 @@ function relativeDayLabel(date: Date, today: Date) {
 
 /* ---------- Component ---------- */
 
-export function CalendarView({ habits, onClose, onEditTask, onUpdateTask, onGoToDate }: Props) {
+export function CalendarView({ habits, onEditTask, onUpdateTask, onGoToDate }: Props) {
+  const { blocks, notes } = usePlanner();
   const [today] = useState(() => startOfDay(new Date()));
   const todayStr = normalizeDateStr(today);
 
@@ -82,83 +84,35 @@ export function CalendarView({ habits, onClose, onEditTask, onUpdateTask, onGoTo
     return eachDayOfInterval({ start, end });
   }, [viewMonth]);
 
-  // Per-day streak info computed from the earliest tracked day through the end of the grid
-  const dayInfo = useMemo(() => {
-    const map = new Map<string, DayInfo>();
-    if (streakHabits.length === 0) return map;
+  // One pass from the first tracked day to today: per-day status for the grid, plus current / best streak.
+  // Days after today or before tracking began have no entry.
+  const { dayInfo, streakSummary } = useMemo(() => {
+    const dayInfo = new Map<string, DayInfo>();
+    let run = 0;
+    let best = 0;
+    if (streakHabits.length > 0) {
+      const starts = streakHabits.map(habitStart);
+      const earliest = starts.reduce((a, b) => (isBefore(b, a) ? b : a));
+      // Weekly / monthly habits count their streak once per period rather than per day
+      const periodic = focusedHabit && focusedHabit.timeframe !== 'daily' ? focusedHabit : null;
+      let lastKey = '';
 
-    const starts = streakHabits.map(habitStart);
-    const earliest = starts.reduce((a, b) => (isBefore(b, a) ? b : a));
-    const gridEnd = gridDays[gridDays.length - 1];
-    const lastEval = isBefore(gridEnd, today) ? gridEnd : today;
+      for (let d = earliest; !isAfter(d, today); d = addDays(d, 1)) {
+        const active = streakHabits.filter((_, i) => !isBefore(d, starts[i]));
+        const met = active.filter(h => isHabitMetOn(h, d)).length;
+        const perfect = active.length > 0 && met === active.length;
+        const key = periodic ? periodKey(periodic, d) : normalizeDateStr(d);
 
-    // Mark not-yet-evaluated grid days first
-    gridDays.forEach(d => {
-      map.set(normalizeDateStr(d), { met: 0, total: 0, perfect: false, streak: 0, evaluated: false });
-    });
-    if (isAfter(earliest, lastEval)) return map;
-
-    const periodic = focusedHabit && focusedHabit.timeframe !== 'daily';
-    let streak = 0;
-    let lastPeriodKey = '';
-
-    for (let d = earliest; !isAfter(d, lastEval); d = addDays(d, 1)) {
-      const active = streakHabits.filter((_, i) => !isBefore(d, starts[i]));
-      const met = active.filter(h => isHabitMetOn(h, d)).length;
-      const total = active.length;
-      const perfect = total > 0 && met === total;
-      const isToday = isSameDay(d, today);
-
-      if (periodic) {
-        // Count streak in weeks / months rather than days
-        const key = periodKey(focusedHabit!, d);
-        if (key !== lastPeriodKey) {
-          lastPeriodKey = key;
-          if (perfect) streak += 1;
-          else if (!isToday) streak = 0;
+        if (key !== lastKey) {
+          lastKey = key;
+          if (perfect) run += 1;
+          else if (!isSameDay(d, today)) run = 0; // today in progress doesn't break the streak
+          best = Math.max(best, run);
         }
-      } else if (perfect) {
-        streak += 1;
-      } else if (!isToday) {
-        streak = 0; // today in progress doesn't break the streak
+        dayInfo.set(normalizeDateStr(d), { met, total: active.length, perfect, streak: perfect ? run : 0, evaluated: active.length > 0 });
       }
-
-      map.set(normalizeDateStr(d), {
-        met, total, perfect,
-        streak: perfect ? streak : 0,
-        evaluated: total > 0,
-      });
     }
-    return map;
-  }, [streakHabits, gridDays, focusedHabit, today]);
-
-  // Streak summary (current + best) — independent of visible month
-  const streakSummary = useMemo(() => {
-    if (streakHabits.length === 0) return { current: 0, best: 0 };
-    const starts = streakHabits.map(habitStart);
-    const earliest = starts.reduce((a, b) => (isBefore(b, a) ? b : a));
-    const periodic = focusedHabit && focusedHabit.timeframe !== 'daily';
-
-    let run = 0, best = 0, current = 0;
-    let lastKey = '';
-    for (let d = earliest; !isAfter(d, today); d = addDays(d, 1)) {
-      const active = streakHabits.filter((_, i) => !isBefore(d, starts[i]));
-      const perfect = active.length > 0 && active.every(h => isHabitMetOn(h, d));
-      const isToday = isSameDay(d, today);
-      if (periodic) {
-        const key = periodKey(focusedHabit!, d);
-        if (key === lastKey) continue;
-        lastKey = key;
-      }
-      if (perfect) {
-        run += 1;
-        best = Math.max(best, run);
-      } else if (!isToday) {
-        run = 0;
-      }
-      current = run;
-    }
-    return { current, best };
+    return { dayInfo, streakSummary: { current: run, best } };
   }, [streakHabits, focusedHabit, today]);
 
   // Tasks keyed by due date
@@ -184,6 +138,9 @@ export function CalendarView({ habits, onClose, onEditTask, onUpdateTask, onGoTo
 
   const selectedStr = normalizeDateStr(selectedDay);
   const selectedTasks = tasksByDate.get(selectedStr) || [];
+  const selectedNote = notes[selectedStr]?.trim();
+  const selectedBlocks = getDaySegments(blocks, selectedDay);
+  const hasAnythingSelected = selectedTasks.length > 0 || selectedBlocks.length > 0 || Boolean(selectedNote);
   const selectedIsFuture = isAfter(selectedDay, endOfDay(today));
   const selectedHabitStatus = useMemo(
     () => recurring
@@ -199,7 +156,7 @@ export function CalendarView({ habits, onClose, onEditTask, onUpdateTask, onGoTo
     : 'day';
 
   return (
-    <div className="w-full bg-[#0b0c10] border border-gray-800 rounded-2xl shadow-2xl text-white overflow-hidden max-h-[92vh] flex flex-col">
+    <div className="w-full bg-[#0b0c10] border border-gray-800 rounded-2xl shadow-2xl text-white overflow-hidden flex flex-col">
       {/* Header */}
       <div className="flex items-center justify-between gap-3 px-5 py-4 border-b border-gray-800/80 bg-gradient-to-r from-[#11131b] via-[#0e1015] to-[#140f1c] flex-wrap">
         <div className="flex items-center gap-3">
@@ -224,14 +181,6 @@ export function CalendarView({ habits, onClose, onEditTask, onUpdateTask, onGoTo
               <option key={h.id} value={h.id}>{h.icon} {h.name}</option>
             ))}
           </select>
-          <button
-            id="calendar-close"
-            onClick={onClose}
-            className="p-2 rounded-xl text-gray-400 hover:text-white hover:bg-gray-800 transition"
-            aria-label="Close calendar"
-          >
-            <X size={16} />
-          </button>
         </div>
       </div>
 
@@ -363,6 +312,9 @@ export function CalendarView({ habits, onClose, onEditTask, onUpdateTask, onGoTo
                       >
                         {format(day, 'd')}
                       </span>
+                      {notes[dStr]?.trim() && (
+                        <NotebookPen size={10} className="text-amber-400/80 mr-auto ml-1" aria-label="Has notes" />
+                      )}
                       {perfect && (
                         <span className="flex items-center gap-0.5 text-[10px] font-black text-orange-300">
                           <Flame size={11} className="fill-orange-400/60" />
@@ -416,6 +368,7 @@ export function CalendarView({ habits, onClose, onEditTask, onUpdateTask, onGoTo
             <span className="flex items-center gap-1.5"><span className="w-1.5 h-1.5 rounded-full bg-gray-700" /> Missed</span>
             <span className="flex items-center gap-1.5"><span className="w-3 h-2.5 rounded bg-purple-500/30 border border-purple-400/60" /> Task due</span>
             <span className="flex items-center gap-1.5"><span className="w-3 h-2.5 rounded bg-red-500/20 border border-red-500/50" /> Overdue</span>
+            <span className="flex items-center gap-1.5"><NotebookPen size={10} className="text-amber-400/80" /> Has notes</span>
           </div>
         </div>
 
@@ -458,15 +411,47 @@ export function CalendarView({ habits, onClose, onEditTask, onUpdateTask, onGoTo
               </div>
             )}
 
-            {selectedTasks.length > 0 ? (
+            {selectedTasks.length > 0 && (
               <div className="space-y-1">
                 <div className="text-[10px] font-bold uppercase tracking-wider text-purple-300/80 pt-1">Tasks due</div>
                 {selectedTasks.map(t => (
                   <TaskRow key={t.id} task={t} today={today} onToggle={toggleTask} onEdit={onEditTask} />
                 ))}
               </div>
-            ) : (
-              selectedIsFuture && <p className="text-xs text-gray-500">Nothing scheduled for this day.</p>
+            )}
+
+            {selectedBlocks.length > 0 && (
+              <div className="space-y-1">
+                <div className="text-[10px] font-bold uppercase tracking-wider text-blue-300/80 pt-1">Planned</div>
+                {selectedBlocks.map(seg => (
+                  <div
+                    key={seg.key}
+                    className="flex items-center gap-2 text-xs px-2 py-1.5 rounded-lg bg-[#0f1117] border border-gray-800/80"
+                    style={{ borderLeft: `3px solid ${seg.block.color}` }}
+                  >
+                    <span className="text-[10px] font-semibold text-gray-400 w-16 shrink-0">
+                      {seg.continued ? `to ${formatClock(seg.end)}` : formatClock(seg.start)}
+                    </span>
+                    <span className={`flex-1 truncate ${seg.done ? 'line-through text-gray-500' : 'text-gray-200'}`}>{seg.block.title}</span>
+                    {seg.done && <Check size={12} className="text-emerald-400 shrink-0" />}
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {selectedNote && (
+              <div className="space-y-1">
+                <div className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider text-amber-300/80 pt-1">
+                  <NotebookPen size={11} /> Notes
+                </div>
+                <p className="text-xs text-gray-300 whitespace-pre-wrap break-words px-2.5 py-2 rounded-lg bg-[#0f1117] border border-gray-800/80 max-h-40 overflow-y-auto">
+                  {selectedNote}
+                </p>
+              </div>
+            )}
+
+            {selectedIsFuture && !hasAnythingSelected && (
+              <p className="text-xs text-gray-500">Nothing scheduled for this day.</p>
             )}
           </section>
 

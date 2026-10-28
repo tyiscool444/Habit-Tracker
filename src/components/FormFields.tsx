@@ -155,7 +155,7 @@ export function IdentityField({ label, accent, name, onNameChange, placeholder, 
           </div>
 
           {activePicker === 'icon' ? (
-            <div className="flex gap-1.5 flex-wrap max-h-36 overflow-y-auto p-0.5 no-scrollbar">
+            <div className="flex gap-1.5 flex-wrap max-h-36 overflow-y-auto p-0.5">
               {ICONS.map(ic => (
                 <button
                   key={ic}
@@ -230,7 +230,7 @@ export function GroupField({ accent, value, onChange, existingGroups, placeholde
       {existingGroups.length > 0 ? (
         <div className="space-y-1 mt-2">
           <span className="text-[10px] text-gray-400 font-semibold uppercase tracking-wider">Existing Groups:</span>
-          <div className="flex gap-1.5 flex-wrap max-h-20 overflow-y-auto no-scrollbar pt-0.5">
+          <div className="flex gap-1.5 flex-wrap max-h-20 overflow-y-auto pt-0.5">
             {existingGroups.map(g => {
               const isSelected = value.trim().toLowerCase() === g.toLowerCase();
               return (

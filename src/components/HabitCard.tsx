@@ -161,7 +161,7 @@ export function HabitCard({
       }}
       onFocus={(e) => e.target.select()}
       placeholder="0"
-      className={`text-center text-white bg-gray-900 border-2 border-blue-500 shadow-xl focus:outline-none no-spinners ${className}`}
+      className={`text-center text-white bg-gray-900 border-2 border-blue-500 shadow-xl focus:outline-none ${className}`}
     />
   );
 

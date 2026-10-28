@@ -26,7 +26,7 @@ export const getRandomColor = (): string => {
   return COLORS[Math.floor(Math.random() * COLORS.length)];
 };
 
-export interface UnitOption {
+interface UnitOption {
   value: HabitUnit;
   label: string;
   short: string;

@@ -1,16 +1,15 @@
 'use client';
 
+import { usePathname, useRouter } from 'next/navigation';
 import { useHabitTimer } from '../context/TimerContext';
 import { unitLabel } from '../lib/habitUtils';
 import { formatTime } from '../lib/timerTechniques';
 import { Play, Pause, Square, ExternalLink } from 'lucide-react';
 
-interface Props {
-  onOpenInsights: (habitId: string) => void;
-  onOpenTimers?: () => void;
-}
-
-export function FloatingTimerWidget({ onOpenInsights, onOpenTimers }: Props) {
+/** Mini player for the active session, shown on every page except Timers. */
+export function FloatingTimerWidget() {
+  const router = useRouter();
+  const pathname = usePathname();
   const {
     isActive,
     activeHabit: habit,
@@ -23,7 +22,7 @@ export function FloatingTimerWidget({ onOpenInsights, onOpenTimers }: Props) {
     stopTimer,
   } = useHabitTimer();
 
-  if (!isActive) return null;
+  if (!isActive || pathname.startsWith('/timers')) return null;
 
   const themeColor = technique?.color || habit?.color || '#06b6d4';
   const displayEmoji = technique?.emoji || habit?.icon || '⏱️';
@@ -31,13 +30,7 @@ export function FloatingTimerWidget({ onOpenInsights, onOpenTimers }: Props) {
   const displayTime = formatTime(remainingSeconds); // countdown, or elapsed when open-ended
   const isBreak = mode === 'break' || mode === 'longBreak';
 
-  const handleOpen = () => {
-    if (onOpenTimers) {
-      onOpenTimers();
-    } else if (habit) {
-      onOpenInsights(habit.id);
-    }
-  };
+  const handleOpen = () => router.push('/timers');
 
   return (
     <div className="fixed bottom-5 right-5 z-40 animate-in slide-in-from-bottom-5 duration-300">

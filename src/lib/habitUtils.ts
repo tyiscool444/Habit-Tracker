@@ -194,3 +194,13 @@ export function calculateStreaks(habit: Habit): { current: number; best: number 
   }
   return { current: run, best };
 }
+
+/** Unique, trimmed group names used across habits and tasks. */
+export function getExistingGroups(habits: Habit[]): string[] {
+  const set = new Set<string>();
+  habits.forEach(h => {
+    const g = h.group?.trim();
+    if (g) set.add(g);
+  });
+  return Array.from(set);
+}

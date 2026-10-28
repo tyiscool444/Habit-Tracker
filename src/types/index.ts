@@ -48,3 +48,18 @@ export interface Habit {
 }
 
 export type ViewMode = 'day' | 'week' | 'month' | 'year';
+
+/** A time block in the daily planner. */
+export interface PlanBlock {
+  id: string;
+  date: string; // YYYY-MM-DD; for repeating blocks, the first day of the series
+  start: number; // minutes from midnight
+  end: number; // minutes from midnight (exclusive); above 1440 runs past midnight into the next day
+  title: string;
+  color: string;
+  habitId?: string; // optional linked habit or task
+  done?: boolean; // one-off blocks only
+  repeat?: number[]; // weekdays it repeats on (0 = Sunday … 6 = Saturday); empty / absent = one-off
+  doneDates?: string[]; // repeating blocks: occurrence dates ticked off
+  skipDates?: string[]; // repeating blocks: occurrence dates deleted individually
+}

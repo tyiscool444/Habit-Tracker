@@ -5,10 +5,11 @@ import { Habit, HabitUnit } from '../types';
 import { getLogDateStr, isTimeBasedUnit, roundDown } from '../lib/habitUtils';
 import { TimerTechnique, getTechniqueById, flowtimeBreakFor } from '../lib/timerTechniques';
 import { timerSound } from '../lib/soundUtils';
+import { useHabits } from './HabitsContext';
 
-export type TimerPhaseMode = 'focus' | 'break' | 'longBreak';
+type TimerPhaseMode = 'focus' | 'break' | 'longBreak';
 
-export interface TimerState {
+interface TimerState {
   activeHabitId: string | null;
   isRunning: boolean;
   elapsedSeconds: number; // Current interval elapsed seconds
@@ -25,7 +26,7 @@ export interface TimerState {
   totalFocusSecondsLogged: number; // Focus seconds from completed intervals in this session
 }
 
-export interface StartTechniqueParams {
+interface StartTechniqueParams {
   technique: TimerTechnique;
   habitId?: string | null;
   customWorkMinutes?: number;
@@ -34,7 +35,6 @@ export interface StartTechniqueParams {
 
 interface TimerContextValue {
   isActive: boolean; // a session exists (running or paused)
-  techniqueId: string | null;
   activeHabitId: string | null;
   activeHabit: Habit | null;
   activeTechnique: TimerTechnique | null;
@@ -155,15 +155,8 @@ function tick(prev: TimerState, now: number): TimerState {
 
 /* ---------- Provider ---------- */
 
-export function TimerProvider({
-  children,
-  habits,
-  setLog,
-}: {
-  children: React.ReactNode;
-  habits: Habit[];
-  setLog: (habitId: string, dateStr: string, amount: number) => void;
-}) {
+export function TimerProvider({ children }: { children: React.ReactNode }) {
+  const { habits, setLog } = useHabits();
   const [soundEnabled, setSoundEnabled] = useState(() => timerSound.isEnabled());
   const [timerState, setTimerState] = useState<TimerState>(loadSavedState);
 
@@ -237,7 +230,7 @@ export function TimerProvider({
       isRunning: true,
       initialTodayAmount: initialAmountFor(habit),
       startedAt: Date.now(),
-      techniqueId: 'custom',
+      techniqueId: null, // plain stopwatch
       workSeconds: 0,
       breakSeconds: 0,
       longBreakSeconds: 0,
@@ -336,7 +329,6 @@ export function TimerProvider({
     <TimerContext.Provider
       value={{
         isActive,
-        techniqueId: timerState.techniqueId,
         activeHabitId: timerState.activeHabitId,
         activeHabit: habits.find(h => h.id === timerState.activeHabitId) || null,
         activeTechnique: timerState.techniqueId ? getTechniqueById(timerState.techniqueId) || null : null,

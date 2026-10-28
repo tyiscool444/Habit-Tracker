@@ -1,21 +1,40 @@
 'use client';
 
 import { useState, useRef } from 'react';
-import { Habit } from '../types';
+import { Habit, PlanBlock } from '../types';
 import { getSampleHabits } from '../lib/sampleHabits';
-import { 
-  X, Download, Upload, Sparkles, Trash2, Database, 
+import { useHabits } from '../context/HabitsContext';
+import { usePlanner } from '../context/PlannerContext';
+import {
+  Download, Upload, Sparkles, Trash2, Database,
   CheckCircle2, AlertTriangle, ShieldCheck, FileJson
 } from 'lucide-react';
 
-interface Props {
+interface Backup {
+  version: 2;
   habits: Habit[];
-  onSetAllHabits: (habits: Habit[]) => void;
-  onClearAll: () => void;
-  onClose: () => void;
+  planner: PlanBlock[];
+  notes: Record<string, string>;
 }
 
-export function DataSyncModal({ habits, onSetAllHabits, onClearAll, onClose }: Props) {
+/** Accepts the current { habits, planner } format or a legacy bare array of habits. */
+function parseBackup(content: string): { habits: Habit[]; planner?: PlanBlock[]; notes?: Record<string, string> } {
+  const parsed = JSON.parse(content);
+  const habits = Array.isArray(parsed) ? parsed : parsed?.habits;
+  if (!Array.isArray(habits)) {
+    throw new Error('File does not contain a list of habits.');
+  }
+  if (!habits.every(item => item && typeof item.id === 'string' && typeof item.name === 'string')) {
+    throw new Error('Invalid format: habits must have id and name.');
+  }
+  const planner = Array.isArray(parsed?.planner) ? parsed.planner : undefined;
+  const notes = parsed?.notes && typeof parsed.notes === 'object' && !Array.isArray(parsed.notes) ? parsed.notes : undefined;
+  return { habits, planner, notes };
+}
+
+export function DataSyncView() {
+  const { habits, setAllHabits } = useHabits();
+  const { blocks, setAllBlocks, notes, setAllNotes } = usePlanner();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [feedback, setFeedback] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
   const [confirmReset, setConfirmReset] = useState(false);
@@ -24,33 +43,32 @@ export function DataSyncModal({ habits, onSetAllHabits, onClearAll, onClose }: P
   const totalRecurring = habits.filter(h => h.isRecurring !== false).length;
   const totalTasks = habits.filter(h => h.isRecurring === false).length;
   const totalLogs = habits.reduce((acc, h) => acc + Object.keys(h.logs || {}).length, 0);
+  const noteCount = Object.keys(notes).length;
+  const hasData = habits.length > 0 || blocks.length > 0 || noteCount > 0;
 
   const triggerFeedback = (message: string, type: 'success' | 'error' = 'success') => {
     setFeedback({ message, type });
     setTimeout(() => setFeedback(null), 3500);
   };
 
-  // Export JSON Backup
   const handleExport = () => {
     try {
-      const dataStr = JSON.stringify(habits, null, 2);
-      const blob = new Blob([dataStr], { type: 'application/json' });
+      const backup: Backup = { version: 2, habits, planner: blocks, notes };
+      const blob = new Blob([JSON.stringify(backup, null, 2)], { type: 'application/json' });
       const url = URL.createObjectURL(blob);
-      const dateStr = new Date().toISOString().slice(0, 10);
       const link = document.createElement('a');
       link.href = url;
-      link.download = `habitthat-backup-${dateStr}.json`;
+      link.download = `habitthat-backup-${new Date().toISOString().slice(0, 10)}.json`;
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
       URL.revokeObjectURL(url);
-      triggerFeedback(`Successfully exported ${habits.length} habits!`, 'success');
+      triggerFeedback(`Exported ${habits.length} habits, ${blocks.length} planned blocks and ${noteCount} notes!`, 'success');
     } catch {
       triggerFeedback('Failed to export data.', 'error');
     }
   };
 
-  // Import JSON Backup
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -58,21 +76,14 @@ export function DataSyncModal({ habits, onSetAllHabits, onClearAll, onClose }: P
     const reader = new FileReader();
     reader.onload = (event) => {
       try {
-        const content = event.target?.result as string;
-        const parsed = JSON.parse(content);
-
-        if (!Array.isArray(parsed)) {
-          throw new Error('Import file must be a JSON array of habits.');
-        }
-
-        // Basic validation
-        const valid = parsed.every(item => item && typeof item.id === 'string' && typeof item.name === 'string');
-        if (!valid) {
-          throw new Error('Invalid format: habits must have id and name.');
-        }
-
-        onSetAllHabits(parsed);
-        triggerFeedback(`Successfully imported ${parsed.length} habits!`, 'success');
+        const backup = parseBackup(event.target?.result as string);
+        setAllHabits(backup.habits);
+        if (backup.planner) setAllBlocks(backup.planner);
+        if (backup.notes) setAllNotes(backup.notes);
+        triggerFeedback(
+          `Imported ${backup.habits.length} habits${backup.planner ? ` and ${backup.planner.length} planned blocks` : ''}!`,
+          'success'
+        );
       } catch (err: unknown) {
         const msg = err instanceof Error ? err.message : 'Invalid JSON file.';
         triggerFeedback(`Import failed: ${msg}`, 'error');
@@ -83,23 +94,23 @@ export function DataSyncModal({ habits, onSetAllHabits, onClearAll, onClose }: P
     reader.readAsText(file);
   };
 
-  // Load Preset
   const handleLoadPreset = () => {
     const preset = getSampleHabits();
-    onSetAllHabits(preset);
+    setAllHabits(preset);
     setConfirmPreset(false);
     triggerFeedback(`Loaded ${preset.length} starter habits & tasks!`, 'success');
   };
 
-  // Handle Clear
   const handleClearAll = () => {
-    onClearAll();
+    setAllHabits([]);
+    setAllBlocks([]);
+    setAllNotes({});
     setConfirmReset(false);
     triggerFeedback('All data has been cleared.', 'success');
   };
 
   return (
-    <div className="bg-[#0b0c10] border border-gray-800 rounded-3xl p-6 sm:p-7 shadow-2xl text-white space-y-6 max-h-[90vh] overflow-y-auto no-scrollbar">
+    <div className="bg-[#0b0c10] border border-gray-800 rounded-3xl p-6 sm:p-7 shadow-2xl text-white space-y-6">
       {/* Header */}
       <div className="flex items-center justify-between border-b border-gray-800/80 pb-4">
         <div className="flex items-center gap-3">
@@ -111,12 +122,6 @@ export function DataSyncModal({ habits, onSetAllHabits, onClearAll, onClose }: P
             <p className="text-xs text-gray-400">Export backups, transfer across devices, or load sample templates</p>
           </div>
         </div>
-        <button
-          onClick={onClose}
-          className="w-8 h-8 rounded-full bg-gray-900/80 hover:bg-gray-800 border border-gray-700/60 flex items-center justify-center text-gray-400 hover:text-white transition"
-        >
-          <X size={16} />
-        </button>
       </div>
 
       {/* Feedback Banner */}
@@ -134,7 +139,7 @@ export function DataSyncModal({ habits, onSetAllHabits, onClearAll, onClose }: P
       )}
 
       {/* Storage Summary */}
-      <div className="grid grid-cols-3 gap-3">
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         <div className="bg-[#12141c] border border-gray-800/90 rounded-2xl p-3 text-center">
           <span className="text-[10px] uppercase tracking-wider text-gray-500 font-bold block mb-1">Habits</span>
           <span className="text-lg font-black text-blue-400">{totalRecurring}</span>
@@ -146,6 +151,10 @@ export function DataSyncModal({ habits, onSetAllHabits, onClearAll, onClose }: P
         <div className="bg-[#12141c] border border-gray-800/90 rounded-2xl p-3 text-center">
           <span className="text-[10px] uppercase tracking-wider text-gray-500 font-bold block mb-1">Logged Entries</span>
           <span className="text-lg font-black text-emerald-400">{totalLogs}</span>
+        </div>
+        <div className="bg-[#12141c] border border-gray-800/90 rounded-2xl p-3 text-center">
+          <span className="text-[10px] uppercase tracking-wider text-gray-500 font-bold block mb-1">Planned Blocks</span>
+          <span className="text-lg font-black text-amber-400">{blocks.length}</span>
         </div>
       </div>
 
@@ -162,7 +171,7 @@ export function DataSyncModal({ habits, onSetAllHabits, onClearAll, onClose }: P
                 Export JSON Backup
                 <FileJson size={13} className="text-blue-400" />
               </div>
-              <p className="text-xs text-gray-400">Save your full progress, streaks, logs, and subtasks to a JSON file.</p>
+              <p className="text-xs text-gray-400">Save your habits, logs, subtasks, daily plans and notes to a JSON file.</p>
             </div>
           </div>
           <button
@@ -183,7 +192,7 @@ export function DataSyncModal({ habits, onSetAllHabits, onClearAll, onClose }: P
             </div>
             <div>
               <div className="text-sm font-bold text-white">Import JSON Backup</div>
-              <p className="text-xs text-gray-400">Restore your habits and logs from a previous backup file.</p>
+              <p className="text-xs text-gray-400">Restore your habits, logs, plans and notes from a previous backup file.</p>
             </div>
           </div>
           <div>
@@ -249,7 +258,7 @@ export function DataSyncModal({ habits, onSetAllHabits, onClearAll, onClose }: P
             </div>
             <div>
               <div className="text-sm font-bold text-white">Reset All Data</div>
-              <p className="text-xs text-gray-400">Clear all habits, tasks, and historical logged data on this browser.</p>
+              <p className="text-xs text-gray-400">Clear all habits, tasks, plans, notes and logged data on this browser.</p>
             </div>
           </div>
           {confirmReset ? (
@@ -270,7 +279,7 @@ export function DataSyncModal({ habits, onSetAllHabits, onClearAll, onClose }: P
           ) : (
             <button
               onClick={() => setConfirmReset(true)}
-              disabled={habits.length === 0}
+              disabled={!hasData}
               className="px-4 py-2 rounded-xl bg-red-500/10 hover:bg-red-500/20 disabled:opacity-40 disabled:cursor-not-allowed text-red-400 border border-red-500/30 text-xs font-bold transition flex items-center justify-center gap-1.5 shrink-0"
             >
               <Trash2 size={14} />

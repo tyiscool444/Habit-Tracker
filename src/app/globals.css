@@ -28,18 +28,12 @@ input[type="number"] {
   -moz-appearance: textfield;
 }
 
-/* Global Scrollbar Suppression */
-*::-webkit-scrollbar,
-.no-scrollbar::-webkit-scrollbar {
-  display: none !important;
-  width: 0 !important;
-  height: 0 !important;
-  background: transparent !important;
+/* Hide scrollbars everywhere (content still scrolls) */
+*::-webkit-scrollbar {
+  display: none;
 }
 
-*,
-.no-scrollbar {
-  -ms-overflow-style: none !important;
-  scrollbar-width: none !important;
+* {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
 }
-

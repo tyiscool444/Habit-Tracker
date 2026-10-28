@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
+import { AppShell } from "../components/AppShell";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -21,7 +22,10 @@ export const viewport: Viewport = {
 };
 
 export const metadata: Metadata = {
-  title: "HabitThat — Modern Habit & Goal Tracker",
+  title: {
+    default: "HabitThat — Modern Habit & Goal Tracker",
+    template: "%s · HabitThat",
+  },
   description: "Track your habits, build lasting streaks, and achieve daily & long-term goals with an interactive heatmap grid, live stopwatch, and cloud backup sync.",
   manifest: "/manifest.json",
   icons: {
@@ -52,7 +56,9 @@ export default function RootLayout({
       lang="en"
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
-      <body className="min-h-full flex flex-col bg-[#07080a] text-slate-100">{children}</body>
+      <body className="min-h-full bg-[#07080a] text-slate-100">
+        <AppShell>{children}</AppShell>
+      </body>
     </html>
   );
 }
