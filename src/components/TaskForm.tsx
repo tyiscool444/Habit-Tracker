@@ -36,6 +36,8 @@ export function TaskForm({ initialTask, existingGroups = [], onSave, onCancel, o
   const [type, setType] = useState<HabitType>(initialTask?.type || 'START');
   const [unit, setUnit] = useState<HabitUnit>(initialTask?.unit || 'amount');
   const [quota, setQuota] = useState(initialTask?.quota || 1);
+  // New tasks are simple check-offs; existing tasks keep how they were tracked
+  const [checkOnly, setCheckOnly] = useState(initialTask ? Boolean(initialTask.checkOnly) : true);
   // New tasks default to a deadline of today; existing tasks keep whatever they had
   const [hasDeadline, setHasDeadline] = useState(initialTask ? Boolean(initialTask.targetDate) : true);
   const [targetDate, setTargetDate] = useState(() =>
@@ -86,9 +88,11 @@ export function TaskForm({ initialTask, existingGroups = [], onSave, onCancel, o
       icon,
       color,
       group: group.trim() || undefined,
-      type,
-      unit,
-      quota: quota || 1,
+      // A check-off is just "done once": a START task with a target of 1
+      type: checkOnly ? 'START' : type,
+      unit: checkOnly ? 'amount' : unit,
+      quota: checkOnly ? 1 : quota || 1,
+      checkOnly: checkOnly || undefined,
       timeframe: 'daily',
       isRecurring: false,
       targetDate: deadline,
@@ -216,50 +220,64 @@ export function TaskForm({ initialTask, existingGroups = [], onSave, onCancel, o
         </div>
       </div>
 
-      {/* Task Type & Target Goal Row */}
-      <div className="grid grid-cols-2 gap-3">
-        <div>
-          <label className={`${LABEL_CLASS} mb-1.5`}>Task Nature</label>
-          <TypeToggle
-            value={type}
-            onChange={setType}
-            options={[
-              { value: 'START', label: 'Task', activeClass: 'bg-purple-600' },
-              { value: 'STOP', label: 'Restraint', activeClass: 'bg-amber-600' },
-            ]}
-          />
-        </div>
+      <div>
+        <label className={`${LABEL_CLASS} mb-1.5`}>Tracking</label>
+        <TypeToggle
+          value={checkOnly ? 'check' : 'amount'}
+          onChange={(v) => setCheckOnly(v === 'check')}
+          options={[
+            { value: 'check', label: 'Check off', activeClass: 'bg-purple-600' },
+            { value: 'amount', label: 'Amount', activeClass: 'bg-purple-600' },
+          ]}
+        />
+      </div>
 
-        <div>
-          <label className={`${LABEL_CLASS} mb-1.5`}>Target & Unit</label>
-          <div className="grid grid-cols-5 gap-1.5">
-            <div className={`col-span-2 ${INPUT_BOX_CLASS} px-2 py-1.5 ${focusWithin}`}>
-              <input
-                type="number"
-                min="1"
-                step="any"
-                required
-                className="w-full bg-transparent text-xs font-bold text-white focus:outline-none"
-                value={quota}
-                onChange={e => setQuota(parseFloat(e.target.value) || 1)}
-              />
-            </div>
-            <div className={`col-span-3 ${INPUT_BOX_CLASS} px-2 py-1.5 ${focusWithin}`}>
-              <select
-                className="w-full bg-transparent text-xs font-semibold text-gray-200 focus:outline-none cursor-pointer"
-                value={unit}
-                onChange={e => setUnit(e.target.value as HabitUnit)}
-              >
-                {UNITS.map(u => (
-                  <option key={u.value} value={u.value} className="bg-gray-900 text-white">
-                    {u.short}
-                  </option>
-                ))}
-              </select>
+      {/* Task Type & Target Goal Row (amount tracking only) */}
+      {!checkOnly && (
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label className={`${LABEL_CLASS} mb-1.5`}>Task Nature</label>
+            <TypeToggle
+              value={type}
+              onChange={setType}
+              options={[
+                { value: 'START', label: 'Task', activeClass: 'bg-purple-600' },
+                { value: 'STOP', label: 'Restraint', activeClass: 'bg-amber-600' },
+              ]}
+            />
+          </div>
+
+          <div>
+            <label className={`${LABEL_CLASS} mb-1.5`}>Target & Unit</label>
+            <div className="grid grid-cols-5 gap-1.5">
+              <div className={`col-span-2 ${INPUT_BOX_CLASS} px-2 py-1.5 ${focusWithin}`}>
+                <input
+                  type="number"
+                  min="1"
+                  step="any"
+                  required
+                  className="w-full bg-transparent text-xs font-bold text-white focus:outline-none"
+                  value={quota}
+                  onChange={e => setQuota(parseFloat(e.target.value) || 1)}
+                />
+              </div>
+              <div className={`col-span-3 ${INPUT_BOX_CLASS} px-2 py-1.5 ${focusWithin}`}>
+                <select
+                  className="w-full bg-transparent text-xs font-semibold text-gray-200 focus:outline-none cursor-pointer"
+                  value={unit}
+                  onChange={e => setUnit(e.target.value as HabitUnit)}
+                >
+                  {UNITS.map(u => (
+                    <option key={u.value} value={u.value} className="bg-gray-900 text-white">
+                      {u.short}
+                    </option>
+                  ))}
+                </select>
+              </div>
             </div>
           </div>
         </div>
-      </div>
+      )}
 
       {/* Subtasks */}
       <div className="space-y-2 pt-1 border-t border-gray-800/60">

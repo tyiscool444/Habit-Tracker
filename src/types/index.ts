@@ -43,6 +43,7 @@ export interface Habit {
   isRecurring?: boolean; // true by default; if false, this is a one-off goal
   targetDate?: string; // ISO String (YYYY-MM-DD) for one-off habits
   dueTime?: number; // one-off tasks: optional time of day, minutes from midnight
+  checkOnly?: boolean; // one-off tasks: a plain checkbox, no amount to track
   startDate: string; // ISO String (YYYY-MM-DD)
   logs: Record<string, number>; // date string (YYYY-MM-DD) → amount logged
   subtasks?: SubTask[];

@@ -83,7 +83,7 @@ export function OneOffTaskCard({ task, onEdit, onUpdateTask, highlighted = false
   };
 
   return (
-    <div className="w-full flex flex-col border-b border-gray-800/80 select-none">
+    <div id={`task-${task.id}`} className="w-full flex flex-col border-b border-gray-800/80 select-none scroll-mt-24">
       {/* Main Task Row */}
       <div
         onMouseEnter={() => onHoverChange?.(true)}
@@ -177,35 +177,37 @@ export function OneOffTaskCard({ task, onEdit, onUpdateTask, highlighted = false
           </div>
         </div>
 
-        {/* Right Column: Quota Badge & Steppers */}
-        <div className="flex items-center gap-2 shrink-0 ml-auto" onClick={(e) => e.stopPropagation()}>
-          {/* Progress Quota Badge */}
-          <span
-            onClick={onEdit}
-            className={`border px-2.5 py-1 rounded-lg text-[11px] font-semibold whitespace-nowrap shrink-0 transition-colors cursor-pointer hover:brightness-125 ${getStatusBadgeStyle()}`}
-          >
-            {formatAmount(currentAmt)}/{formatAmount(task.quota)} {unitLabel(task.unit)}
-          </span>
+        {/* Right Column: Quota Badge & Steppers (check-off tasks only need the checkbox) */}
+        {!task.checkOnly && (
+          <div className="flex items-center gap-2 shrink-0 ml-auto" onClick={(e) => e.stopPropagation()}>
+            {/* Progress Quota Badge */}
+            <span
+              onClick={onEdit}
+              className={`border px-2.5 py-1 rounded-lg text-[11px] font-semibold whitespace-nowrap shrink-0 transition-colors cursor-pointer hover:brightness-125 ${getStatusBadgeStyle()}`}
+            >
+              {formatAmount(currentAmt)}/{formatAmount(task.quota)} {unitLabel(task.unit)}
+            </span>
 
-          {/* Stepper Buttons */}
-          <div className="flex items-center gap-0.5 bg-gray-900/90 p-0.5 rounded-lg border border-gray-800 shadow-inner">
-            <button
-              type="button"
-              onClick={(e) => handleAdjust(e, -1)}
-              disabled={currentAmt <= 0}
-              className="w-6 h-6 rounded flex items-center justify-center text-gray-400 hover:text-white hover:bg-gray-800 disabled:opacity-30 disabled:cursor-not-allowed transition active:scale-95"
-            >
-              <Minus size={11} strokeWidth={2.5} />
-            </button>
-            <button
-              type="button"
-              onClick={(e) => handleAdjust(e, 1)}
-              className="w-6 h-6 rounded flex items-center justify-center text-gray-400 hover:text-white hover:bg-gray-800 transition active:scale-95"
-            >
-              <Plus size={11} strokeWidth={2.5} />
-            </button>
+            {/* Stepper Buttons */}
+            <div className="flex items-center gap-0.5 bg-gray-900/90 p-0.5 rounded-lg border border-gray-800 shadow-inner">
+              <button
+                type="button"
+                onClick={(e) => handleAdjust(e, -1)}
+                disabled={currentAmt <= 0}
+                className="w-6 h-6 rounded flex items-center justify-center text-gray-400 hover:text-white hover:bg-gray-800 disabled:opacity-30 disabled:cursor-not-allowed transition active:scale-95"
+              >
+                <Minus size={11} strokeWidth={2.5} />
+              </button>
+              <button
+                type="button"
+                onClick={(e) => handleAdjust(e, 1)}
+                className="w-6 h-6 rounded flex items-center justify-center text-gray-400 hover:text-white hover:bg-gray-800 transition active:scale-95"
+              >
+                <Plus size={11} strokeWidth={2.5} />
+              </button>
+            </div>
           </div>
-        </div>
+        )}
       </div>
 
       {/* Dropdown Menu for Subtasks */}

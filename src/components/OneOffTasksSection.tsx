@@ -1,7 +1,7 @@
 'use client';
 
 import { useMemo, useState } from 'react';
-import { ArrowUpDown, Layers, PlusCircle, Target, Trash2 } from 'lucide-react';
+import { ArrowUpDown, Dices, Layers, PlusCircle, Target, Trash2, X } from 'lucide-react';
 import { Habit } from '../types';
 import { getExistingGroups, isTaskComplete, normalizeDateStr, taskDueDate } from '../lib/habitUtils';
 import { OneOffTaskCard } from './OneOffTaskCard';
@@ -67,6 +67,7 @@ export function OneOffTasksSection({ tasks, onAdd, onEdit, onUpdateTask, onDelet
   const [group, setGroup] = useState('all');
   const [sortKey, setSortKey] = useState<SortKey>('deadline');
   const [grouped, setGrouped] = useState(true);
+  const [pickedId, setPickedId] = useState<string | null>(null);
 
   const todayStr = normalizeDateStr(new Date());
   const groups = useMemo(() => getExistingGroups(tasks), [tasks]);
@@ -79,6 +80,19 @@ export function OneOffTasksSection({ tasks, onAdd, onEdit, onUpdateTask, onDelet
     .filter(t => matchesGroup(t, group))
     .sort(SORTERS[sortKey]),
   [tasks, query, status, deadline, group, sortKey, todayStr]);
+
+  // Random pick: an unfinished task from what's currently listed (so filters narrow the choice)
+  const candidates = visibleTasks.filter(t => !isTaskComplete(t));
+  const picked = tasks.find(t => t.id === pickedId);
+  const pickRandom = () => {
+    const pool = candidates.length > 1 ? candidates.filter(t => t.id !== pickedId) : candidates;
+    if (pool.length === 0) return;
+    const choice = pool[Math.floor(Math.random() * pool.length)];
+    setPickedId(choice.id);
+    requestAnimationFrame(() => {
+      document.getElementById(`task-${choice.id}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    });
+  };
 
   const activeFilters = [query.trim(), status !== 'all', deadline !== 'all', group !== 'all'].filter(Boolean).length;
   const clearFilters = () => {
@@ -149,6 +163,17 @@ export function OneOffTasksSection({ tasks, onAdd, onEdit, onUpdateTask, onDelet
               <Layers size={14} />
             </button>
           )}
+          <button
+            type="button"
+            onClick={pickRandom}
+            disabled={candidates.length === 0}
+            aria-label="Pick a random to-do"
+            title="Pick a random to-do"
+            className="px-2 py-1 rounded-lg border bg-gray-900 hover:bg-gray-800 text-gray-300 hover:text-white border-gray-700 text-xs font-semibold flex items-center gap-1.5 transition disabled:opacity-40 disabled:cursor-not-allowed active:scale-95"
+          >
+            <Dices size={14} className="text-purple-300" />
+            <span>Random</span>
+          </button>
         </div>
 
         <div className="flex items-center gap-2 flex-wrap">
@@ -167,6 +192,33 @@ export function OneOffTasksSection({ tasks, onAdd, onEdit, onUpdateTask, onDelet
           )}
         </div>
       </div>
+
+      {picked && (
+        <div className="flex items-center gap-3 px-3 py-2 border-b border-gray-800 bg-purple-500/10">
+          <Dices size={14} className="text-purple-300 shrink-0" />
+          <span className="flex-1 min-w-0 truncate text-xs text-gray-300">
+            {isTaskComplete(picked) ? 'Done, nice! ' : 'Do this: '}
+            <span className="font-bold text-white">{picked.icon} {picked.name}</span>
+          </span>
+          {candidates.some(t => t.id !== picked.id) && (
+            <button
+              type="button"
+              onClick={pickRandom}
+              className="shrink-0 px-2 py-0.5 rounded-lg text-[11px] font-semibold text-purple-200 hover:text-white hover:bg-purple-500/20 transition"
+            >
+              Pick again
+            </button>
+          )}
+          <button
+            type="button"
+            onClick={() => setPickedId(null)}
+            aria-label="Dismiss pick"
+            className="shrink-0 text-gray-400 hover:text-white"
+          >
+            <X size={13} />
+          </button>
+        </div>
+      )}
 
       {showFilters && (
         <div className="px-3 py-2.5 border-b border-gray-800 bg-[#0b0c10] space-y-2.5 animate-in fade-in duration-150">
@@ -214,7 +266,7 @@ export function OneOffTasksSection({ tasks, onAdd, onEdit, onUpdateTask, onDelet
               task={task}
               onEdit={() => onEdit(task.id)}
               onUpdateTask={onUpdateTask}
-              highlighted={hoveredTaskId === task.id}
+              highlighted={hoveredTaskId === task.id || pickedId === task.id}
               onHoverChange={(hovering) => onHoverTask(hovering ? task.id : null)}
             />
           )}
