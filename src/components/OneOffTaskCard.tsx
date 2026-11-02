@@ -3,24 +3,29 @@
 import { useState } from 'react';
 import { Habit } from '../types';
 import {
-  unitLabel, formatAmount, generateId, taskDateStr, isTaskComplete, withLog, toggleTaskComplete,
+  unitLabel, formatAmount, generateId, taskDateStr, taskDueDate, isTaskComplete, withLog, toggleTaskComplete,
 } from '../lib/habitUtils';
 import { Check, Calendar, Plus, Minus, ChevronDown, ListChecks, Trash2 } from 'lucide-react';
 import { format, parseISO, isBefore, startOfDay, isSameDay } from 'date-fns';
+import { formatClock } from '../lib/plannerUtils';
 
 interface Props {
   task: Habit;
   onEdit: () => void;
   onUpdateTask: (updatedTask: Habit) => void;
+  /** Set while the task's marker on the daily planner is hovered. */
+  highlighted?: boolean;
+  onHoverChange?: (hovering: boolean) => void;
 }
 
-export function OneOffTaskCard({ task, onEdit, onUpdateTask }: Props) {
+export function OneOffTaskCard({ task, onEdit, onUpdateTask, highlighted = false, onHoverChange }: Props) {
   const [isOpen, setIsOpen] = useState(false);
   const [newSubtaskTitle, setNewSubtaskTitle] = useState('');
 
-  const targetDateStr = taskDateStr(task);
-  const targetDate = parseISO(targetDateStr);
-  const currentAmt = task.logs[targetDateStr] || 0;
+  const logDateStr = taskDateStr(task);
+  const dueDateStr = taskDueDate(task);
+  const dueDate = dueDateStr ? parseISO(dueDateStr) : null;
+  const currentAmt = task.logs[logDateStr] || 0;
   const today = startOfDay(new Date());
 
   const subtasks = task.subtasks || [];
@@ -28,8 +33,8 @@ export function OneOffTaskCard({ task, onEdit, onUpdateTask }: Props) {
   const totalSubtasksCount = subtasks.length;
 
   const isCompleted = isTaskComplete(task);
-  const isTargetToday = isSameDay(targetDate, today);
-  const isPastDue = isBefore(targetDate, today) && !isCompleted;
+  const isTargetToday = dueDate !== null && isSameDay(dueDate, today);
+  const isPastDue = dueDate !== null && isBefore(dueDate, today) && !isCompleted;
 
   const toggleComplete = (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -38,7 +43,7 @@ export function OneOffTaskCard({ task, onEdit, onUpdateTask }: Props) {
 
   const handleAdjust = (e: React.MouseEvent, delta: number) => {
     e.stopPropagation();
-    onUpdateTask(withLog(task, targetDateStr, Math.max(0, currentAmt + delta)));
+    onUpdateTask(withLog(task, logDateStr, Math.max(0, currentAmt + delta)));
   };
 
   // Ticking every subtask completes a START task; unticking one re-opens it
@@ -49,9 +54,9 @@ export function OneOffTaskCard({ task, onEdit, onUpdateTask }: Props) {
     let updated: Habit = { ...task, subtasks: nextSubtasks };
     if (task.type === 'START') {
       if (nextSubtasks.every(s => s.completed)) {
-        updated = withLog(updated, targetDateStr, task.quota);
+        updated = withLog(updated, logDateStr, task.quota);
       } else if (isCompleted) {
-        updated = withLog(updated, targetDateStr, 0);
+        updated = withLog(updated, logDateStr, 0);
       }
     }
     onUpdateTask(updated);
@@ -80,7 +85,14 @@ export function OneOffTaskCard({ task, onEdit, onUpdateTask }: Props) {
   return (
     <div className="w-full flex flex-col border-b border-gray-800/80 select-none">
       {/* Main Task Row */}
-      <div className="w-full flex items-center justify-between px-3.5 py-2 bg-[#0c0d10] hover:bg-[#101115] transition-colors group min-h-[52px]">
+      <div
+        onMouseEnter={() => onHoverChange?.(true)}
+        onMouseLeave={() => onHoverChange?.(false)}
+        className={`w-full flex items-center justify-between px-3.5 py-2 transition-colors group min-h-[52px] ${
+          highlighted ? 'bg-[#141924]' : 'bg-[#0c0d10] hover:bg-[#101115]'
+        }`}
+        style={highlighted ? { boxShadow: `inset 3px 0 0 ${task.color}, inset 0 0 0 1px ${task.color}66` } : undefined}
+      >
         {/* Left Column: Checkbox + Icon + Name + Group + Due Date + Subtasks Toggle Badge */}
         <div className="flex items-center gap-2.5 min-w-0 flex-1 mr-3">
           {/* Checkbox Complete Button */}
@@ -123,16 +135,19 @@ export function OneOffTaskCard({ task, onEdit, onUpdateTask }: Props) {
                 </span>
               )}
 
-              <div className="flex items-center gap-1 text-[11px] text-gray-500 shrink-0">
-                <Calendar size={11} className="shrink-0" />
-                <span
-                  className={`font-medium ${
-                    isPastDue ? 'text-red-400 font-semibold' : isTargetToday ? 'text-blue-400 font-semibold' : ''
-                  }`}
-                >
-                  {isTargetToday ? 'Today' : format(targetDate, 'MMM d, yyyy')}
-                </span>
-              </div>
+              {dueDate && (
+                <div className="flex items-center gap-1 text-[11px] text-gray-500 shrink-0">
+                  <Calendar size={11} className="shrink-0" />
+                  <span
+                    className={`font-medium ${
+                      isPastDue ? 'text-red-400 font-semibold' : isTargetToday ? 'text-blue-400 font-semibold' : ''
+                    }`}
+                  >
+                    {isTargetToday ? 'Today' : format(dueDate, 'MMM d, yyyy')}
+                    {task.dueTime !== undefined && ` · ${formatClock(task.dueTime)}`}
+                  </span>
+                </div>
+              )}
 
               {/* Subtasks Dropdown Toggle Button */}
               <button

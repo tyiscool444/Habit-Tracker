@@ -10,18 +10,13 @@ interface PlannerContextValue {
   updateBlock: (block: PlanBlock) => void;
   deleteBlock: (id: string) => void;
   setAllBlocks: (blocks: PlanBlock[]) => void;
-  /** Free-text notes keyed by YYYY-MM-DD. */
-  notes: Record<string, string>;
-  setNote: (date: string, text: string) => void;
-  setAllNotes: (notes: Record<string, string>) => void;
 }
 
 const PlannerContext = createContext<PlannerContextValue | null>(null);
 
-/** Daily planner time blocks and notes for every date, persisted to localStorage. */
+/** Daily planner time blocks for every date, persisted to localStorage. */
 export function PlannerProvider({ children }: { children: React.ReactNode }) {
   const [blocks, setBlocks] = usePersistentState<PlanBlock[]>('habitthat_planner_v1', []);
-  const [notes, setNotes] = usePersistentState<Record<string, string>>('habitthat_planner_notes_v1', {});
 
   const addBlocks = useCallback((newBlocks: PlanBlock[]) => {
     setBlocks(prev => [...prev, ...newBlocks]);
@@ -35,22 +30,9 @@ export function PlannerProvider({ children }: { children: React.ReactNode }) {
     setBlocks(prev => prev.filter(b => b.id !== id));
   }, [setBlocks]);
 
-  // Cleared notes are removed rather than stored as empty strings
-  const setNote = useCallback((date: string, text: string) => {
-    setNotes(prev => {
-      const next = { ...prev };
-      if (text) next[date] = text;
-      else delete next[date];
-      return next;
-    });
-  }, [setNotes]);
-
   const value = useMemo(
-    () => ({
-      blocks, addBlocks, updateBlock, deleteBlock, setAllBlocks: setBlocks,
-      notes, setNote, setAllNotes: setNotes,
-    }),
-    [blocks, addBlocks, updateBlock, deleteBlock, setBlocks, notes, setNote, setNotes]
+    () => ({ blocks, addBlocks, updateBlock, deleteBlock, setAllBlocks: setBlocks }),
+    [blocks, addBlocks, updateBlock, deleteBlock, setBlocks]
   );
 
   return <PlannerContext.Provider value={value}>{children}</PlannerContext.Provider>;

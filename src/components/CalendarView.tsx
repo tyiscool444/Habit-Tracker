@@ -6,11 +6,11 @@ import { usePlanner } from '../context/PlannerContext';
 import { formatClock, getDaySegments } from '../lib/plannerUtils';
 import {
   normalizeDateStr, timeframeSuffix, WEEK_OPTIONS,
-  taskDateStr, isTaskComplete, isHabitMetOn, getTrackingStart, toggleTaskComplete,
+  taskDateStr, taskDueDate, isTaskComplete, isHabitMetOn, getTrackingStart, toggleTaskComplete,
 } from '../lib/habitUtils';
 import {
   ChevronLeft, ChevronRight, Flame, Trophy, CalendarDays, Target,
-  Check, AlertTriangle, Clock, ArrowRight, NotebookPen,
+  Check, AlertTriangle, Clock, ArrowRight,
 } from 'lucide-react';
 import {
   format, parseISO, startOfMonth, endOfMonth, startOfWeek, endOfWeek, addDays,
@@ -57,7 +57,7 @@ function relativeDayLabel(date: Date, today: Date) {
 /* ---------- Component ---------- */
 
 export function CalendarView({ habits, onEditTask, onUpdateTask, onGoToDate }: Props) {
-  const { blocks, notes } = usePlanner();
+  const { blocks } = usePlanner();
   const [today] = useState(() => startOfDay(new Date()));
   const todayStr = normalizeDateStr(today);
 
@@ -66,7 +66,8 @@ export function CalendarView({ habits, onEditTask, onUpdateTask, onGoToDate }: P
   const [habitFilter, setHabitFilter] = useState<'all' | string>('all');
 
   const recurring = useMemo(() => habits.filter(h => h.isRecurring !== false), [habits]);
-  const tasks = useMemo(() => habits.filter(h => h.isRecurring === false), [habits]);
+  // Open-ended to-dos have no date, so they stay off the calendar
+  const tasks = useMemo(() => habits.filter(h => h.isRecurring === false && taskDueDate(h)), [habits]);
 
   const focusedHabit = habitFilter === 'all' ? null : recurring.find(h => h.id === habitFilter) || null;
 
@@ -138,9 +139,8 @@ export function CalendarView({ habits, onEditTask, onUpdateTask, onGoToDate }: P
 
   const selectedStr = normalizeDateStr(selectedDay);
   const selectedTasks = tasksByDate.get(selectedStr) || [];
-  const selectedNote = notes[selectedStr]?.trim();
   const selectedBlocks = getDaySegments(blocks, selectedDay);
-  const hasAnythingSelected = selectedTasks.length > 0 || selectedBlocks.length > 0 || Boolean(selectedNote);
+  const hasAnythingSelected = selectedTasks.length > 0 || selectedBlocks.length > 0;
   const selectedIsFuture = isAfter(selectedDay, endOfDay(today));
   const selectedHabitStatus = useMemo(
     () => recurring
@@ -312,9 +312,6 @@ export function CalendarView({ habits, onEditTask, onUpdateTask, onGoToDate }: P
                       >
                         {format(day, 'd')}
                       </span>
-                      {notes[dStr]?.trim() && (
-                        <NotebookPen size={10} className="text-amber-400/80 mr-auto ml-1" aria-label="Has notes" />
-                      )}
                       {perfect && (
                         <span className="flex items-center gap-0.5 text-[10px] font-black text-orange-300">
                           <Flame size={11} className="fill-orange-400/60" />
@@ -368,7 +365,6 @@ export function CalendarView({ habits, onEditTask, onUpdateTask, onGoToDate }: P
             <span className="flex items-center gap-1.5"><span className="w-1.5 h-1.5 rounded-full bg-gray-700" /> Missed</span>
             <span className="flex items-center gap-1.5"><span className="w-3 h-2.5 rounded bg-purple-500/30 border border-purple-400/60" /> Task due</span>
             <span className="flex items-center gap-1.5"><span className="w-3 h-2.5 rounded bg-red-500/20 border border-red-500/50" /> Overdue</span>
-            <span className="flex items-center gap-1.5"><NotebookPen size={10} className="text-amber-400/80" /> Has notes</span>
           </div>
         </div>
 
@@ -436,17 +432,6 @@ export function CalendarView({ habits, onEditTask, onUpdateTask, onGoToDate }: P
                     {seg.done && <Check size={12} className="text-emerald-400 shrink-0" />}
                   </div>
                 ))}
-              </div>
-            )}
-
-            {selectedNote && (
-              <div className="space-y-1">
-                <div className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider text-amber-300/80 pt-1">
-                  <NotebookPen size={11} /> Notes
-                </div>
-                <p className="text-xs text-gray-300 whitespace-pre-wrap break-words px-2.5 py-2 rounded-lg bg-[#0f1117] border border-gray-800/80 max-h-40 overflow-y-auto">
-                  {selectedNote}
-                </p>
               </div>
             )}
 

@@ -42,6 +42,7 @@ export interface Habit {
   group?: string; // Optional category / group name e.g. "Morning Routine", "Health & Fitness", "Work"
   isRecurring?: boolean; // true by default; if false, this is a one-off goal
   targetDate?: string; // ISO String (YYYY-MM-DD) for one-off habits
+  dueTime?: number; // one-off tasks: optional time of day, minutes from midnight
   startDate: string; // ISO String (YYYY-MM-DD)
   logs: Record<string, number>; // date string (YYYY-MM-DD) → amount logged
   subtasks?: SubTask[];

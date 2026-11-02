@@ -14,11 +14,10 @@ interface Backup {
   version: 2;
   habits: Habit[];
   planner: PlanBlock[];
-  notes: Record<string, string>;
 }
 
 /** Accepts the current { habits, planner } format or a legacy bare array of habits. */
-function parseBackup(content: string): { habits: Habit[]; planner?: PlanBlock[]; notes?: Record<string, string> } {
+function parseBackup(content: string): { habits: Habit[]; planner?: PlanBlock[] } {
   const parsed = JSON.parse(content);
   const habits = Array.isArray(parsed) ? parsed : parsed?.habits;
   if (!Array.isArray(habits)) {
@@ -28,13 +27,12 @@ function parseBackup(content: string): { habits: Habit[]; planner?: PlanBlock[];
     throw new Error('Invalid format: habits must have id and name.');
   }
   const planner = Array.isArray(parsed?.planner) ? parsed.planner : undefined;
-  const notes = parsed?.notes && typeof parsed.notes === 'object' && !Array.isArray(parsed.notes) ? parsed.notes : undefined;
-  return { habits, planner, notes };
+  return { habits, planner };
 }
 
 export function DataSyncView() {
   const { habits, setAllHabits } = useHabits();
-  const { blocks, setAllBlocks, notes, setAllNotes } = usePlanner();
+  const { blocks, setAllBlocks } = usePlanner();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [feedback, setFeedback] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
   const [confirmReset, setConfirmReset] = useState(false);
@@ -43,8 +41,7 @@ export function DataSyncView() {
   const totalRecurring = habits.filter(h => h.isRecurring !== false).length;
   const totalTasks = habits.filter(h => h.isRecurring === false).length;
   const totalLogs = habits.reduce((acc, h) => acc + Object.keys(h.logs || {}).length, 0);
-  const noteCount = Object.keys(notes).length;
-  const hasData = habits.length > 0 || blocks.length > 0 || noteCount > 0;
+  const hasData = habits.length > 0 || blocks.length > 0;
 
   const triggerFeedback = (message: string, type: 'success' | 'error' = 'success') => {
     setFeedback({ message, type });
@@ -53,7 +50,7 @@ export function DataSyncView() {
 
   const handleExport = () => {
     try {
-      const backup: Backup = { version: 2, habits, planner: blocks, notes };
+      const backup: Backup = { version: 2, habits, planner: blocks };
       const blob = new Blob([JSON.stringify(backup, null, 2)], { type: 'application/json' });
       const url = URL.createObjectURL(blob);
       const link = document.createElement('a');
@@ -63,7 +60,7 @@ export function DataSyncView() {
       link.click();
       document.body.removeChild(link);
       URL.revokeObjectURL(url);
-      triggerFeedback(`Exported ${habits.length} habits, ${blocks.length} planned blocks and ${noteCount} notes!`, 'success');
+      triggerFeedback(`Exported ${habits.length} habits and ${blocks.length} planned blocks!`, 'success');
     } catch {
       triggerFeedback('Failed to export data.', 'error');
     }
@@ -79,7 +76,6 @@ export function DataSyncView() {
         const backup = parseBackup(event.target?.result as string);
         setAllHabits(backup.habits);
         if (backup.planner) setAllBlocks(backup.planner);
-        if (backup.notes) setAllNotes(backup.notes);
         triggerFeedback(
           `Imported ${backup.habits.length} habits${backup.planner ? ` and ${backup.planner.length} planned blocks` : ''}!`,
           'success'
@@ -104,7 +100,6 @@ export function DataSyncView() {
   const handleClearAll = () => {
     setAllHabits([]);
     setAllBlocks([]);
-    setAllNotes({});
     setConfirmReset(false);
     triggerFeedback('All data has been cleared.', 'success');
   };
@@ -171,7 +166,7 @@ export function DataSyncView() {
                 Export JSON Backup
                 <FileJson size={13} className="text-blue-400" />
               </div>
-              <p className="text-xs text-gray-400">Save your habits, logs, subtasks, daily plans and notes to a JSON file.</p>
+              <p className="text-xs text-gray-400">Save your habits, logs, subtasks and daily plans to a JSON file.</p>
             </div>
           </div>
           <button
@@ -192,7 +187,7 @@ export function DataSyncView() {
             </div>
             <div>
               <div className="text-sm font-bold text-white">Import JSON Backup</div>
-              <p className="text-xs text-gray-400">Restore your habits, logs, plans and notes from a previous backup file.</p>
+              <p className="text-xs text-gray-400">Restore your habits, logs and plans from a previous backup file.</p>
             </div>
           </div>
           <div>
@@ -258,7 +253,7 @@ export function DataSyncView() {
             </div>
             <div>
               <div className="text-sm font-bold text-white">Reset All Data</div>
-              <p className="text-xs text-gray-400">Clear all habits, tasks, plans, notes and logged data on this browser.</p>
+              <p className="text-xs text-gray-400">Clear all habits, tasks, plans and logged data on this browser.</p>
             </div>
           </div>
           {confirmReset ? (

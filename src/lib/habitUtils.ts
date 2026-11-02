@@ -116,9 +116,17 @@ export function isHabitMetOn(habit: Habit, date: Date): boolean {
   return meetsQuota(habit, getPeriodAmount(habit, date));
 }
 
-/** Due date (YYYY-MM-DD) of a one-off task. */
+/**
+ * The date a one-off task's progress is logged under (YYYY-MM-DD): its deadline,
+ * or the day it was created for open-ended to-dos.
+ */
 export function taskDateStr(task: Habit): string {
   return normalizeDateStr(task.targetDate || task.startDate || new Date());
+}
+
+/** A one-off task's deadline (YYYY-MM-DD), or null for a to-do with no deadline. */
+export function taskDueDate(task: Habit): string | null {
+  return task.targetDate ? normalizeDateStr(task.targetDate) : null;
 }
 
 /**

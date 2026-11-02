@@ -2,12 +2,11 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { addDays, format, isSameDay, startOfDay, differenceInCalendarDays } from 'date-fns';
-import { CalendarClock, Check, ChevronDown, ChevronLeft, ChevronRight, Copy, NotebookPen, Plus, Repeat } from 'lucide-react';
+import { CalendarClock, Check, ChevronLeft, ChevronRight, Copy, Plus, Repeat } from 'lucide-react';
 import { PlanBlock } from '../types';
 import { useHabits } from '../context/HabitsContext';
 import { usePlanner } from '../context/PlannerContext';
-import { usePersistentState } from '../hooks/usePersistentState';
-import { generateId, normalizeDateStr } from '../lib/habitUtils';
+import { generateId, normalizeDateStr, taskDueDate, isTaskComplete } from '../lib/habitUtils';
 import {
   MINUTES_PER_DAY, SNAP_MINUTES, snapMinutes, formatClock, formatHour, formatDuration, layoutBlocks,
   getDaySegments, isRepeating, withDoneOn, describeRepeat, PlanSegment,
@@ -57,10 +56,17 @@ function dayLabel(date: Date, today: Date): string {
 }
 
 /** Hour-by-hour plan for a single day with a live "now" line. */
-export function DailyPlanner({ className = '' }: { className?: string }) {
+interface Props {
+  className?: string;
+  /** One-off task to emphasise, e.g. while its row in the task list is hovered. */
+  highlightedTaskId?: string | null;
+  onHoverTask?: (taskId: string | null) => void;
+  onEditTask?: (taskId: string) => void;
+}
+
+export function DailyPlanner({ className = '', highlightedTaskId = null, onHoverTask, onEditTask }: Props) {
   const { habits } = useHabits();
-  const { blocks, addBlocks, updateBlock, deleteBlock, notes, setNote } = usePlanner();
-  const [notesOpen, setNotesOpen] = usePersistentState('habitthat_planner_notes_open', true);
+  const { blocks, addBlocks, updateBlock, deleteBlock } = usePlanner();
   const now = useNow();
 
   const [date, setDate] = useState(() => startOfDay(new Date()));
@@ -74,6 +80,11 @@ export function DailyPlanner({ className = '' }: { className?: string }) {
   const nowMinutes = minutesOfDay(now);
 
   const habitsById = useMemo(() => new Map(habits.map(h => [h.id, h])), [habits]);
+  // One-off tasks due at a set time on this day, drawn as marker lines
+  const timedTasks = useMemo(
+    () => habits.filter(h => h.isRecurring === false && h.dueTime !== undefined && taskDueDate(h) === dateStr),
+    [habits, dateStr]
+  );
   const segments = useMemo(() => getDaySegments(blocks, date), [blocks, date]);
 
   // One-off blocks only; repeating blocks already show up every day
@@ -83,8 +94,6 @@ export function DailyPlanner({ className = '' }: { className?: string }) {
     () => blocks.filter(b => !isRepeating(b) && b.date === previousDayStr),
     [blocks, previousDayStr]
   );
-  const note = notes[dateStr] || '';
-  const noteWords = note.trim() ? note.trim().split(/\s+/).length : 0;
 
   // Segments as drawn, with any in-progress move / resize applied
   const activeDrag = drag && drag.kind !== 'create' && drag.moved ? drag : null;
@@ -396,6 +405,35 @@ export function DailyPlanner({ className = '' }: { className?: string }) {
               );
             })}
 
+            {/* Timed one-off tasks */}
+            {timedTasks.map(t => {
+              const done = isTaskComplete(t);
+              const active = highlightedTaskId === t.id;
+              return (
+                <div
+                  key={t.id}
+                  onPointerDown={(e) => e.stopPropagation()}
+                  onClick={() => onEditTask?.(t.id)}
+                  onMouseEnter={() => onHoverTask?.(t.id)}
+                  onMouseLeave={() => onHoverTask?.(null)}
+                  title={`${t.name} · due ${formatClock(t.dueTime!)}`}
+                  className={`absolute left-0 right-0 h-3 -translate-y-1/2 flex items-center cursor-pointer ${active ? 'z-[35]' : 'z-[25]'}`}
+                  style={{ top: toPx(t.dueTime!) }}
+                >
+                  <div
+                    className="flex-1 border-t-2 transition-opacity"
+                    style={{ borderColor: t.color, borderTopStyle: active ? 'solid' : 'dashed', opacity: done ? 0.35 : active ? 1 : 0.75 }}
+                  />
+                  <span
+                    className={`shrink-0 max-w-[65%] truncate px-1.5 py-[1px] rounded-md text-[10px] font-bold text-white transition-shadow ${done ? 'line-through opacity-50' : ''}`}
+                    style={{ backgroundColor: active ? t.color : `${t.color}cc`, boxShadow: active ? `0 0 12px ${t.color}` : undefined }}
+                  >
+                    {t.icon} {t.name} · {formatClock(t.dueTime!)}
+                  </span>
+                </div>
+              );
+            })}
+
             {/* Now indicator */}
             {isToday && (
               <div className="absolute left-0 right-0 z-30 pointer-events-none" style={{ top: toPx(nowMinutes) }}>
@@ -406,38 +444,6 @@ export function DailyPlanner({ className = '' }: { className?: string }) {
             )}
           </div>
         </div>
-      </div>
-
-      {/* Daily notes */}
-      <div className="border-t border-gray-800 bg-[#0e1015]">
-        <button
-          type="button"
-          onClick={() => setNotesOpen(!notesOpen)}
-          aria-expanded={notesOpen}
-          className="w-full flex items-center justify-between px-3 py-2 text-[11px] font-bold uppercase tracking-wider text-gray-400 hover:text-white transition"
-        >
-          <span className="flex items-center gap-1.5">
-            <NotebookPen size={13} className="text-amber-400" />
-            Notes
-            {note && !notesOpen && <span className="w-1.5 h-1.5 rounded-full bg-amber-400" aria-label="Has notes" />}
-          </span>
-          <ChevronDown size={14} className={`transition-transform ${notesOpen ? '' : '-rotate-90'}`} />
-        </button>
-
-        {notesOpen && (
-          <div className="px-3 pb-3">
-            <textarea
-              value={note}
-              onChange={(e) => setNote(dateStr, e.target.value)}
-              placeholder={`Thoughts, wins and reminders for ${isToday ? 'today' : format(date, 'EEE, MMM d')}...`}
-              rows={5}
-              className="w-full resize-none bg-[#12141c] border border-gray-800 focus:border-amber-500/60 rounded-lg p-2.5 text-xs leading-relaxed text-gray-200 placeholder-gray-600 focus:outline-none"
-            />
-            <p className="text-[10px] text-gray-600 text-right">
-              {noteWords > 0 ? `${noteWords} word${noteWords === 1 ? '' : 's'} · saved automatically` : 'Saved automatically'}
-            </p>
-          </div>
-        )}
       </div>
 
       <Modal isOpen={Boolean(editing)} onClose={() => setEditing(null)}>

@@ -2,10 +2,11 @@
 
 import { useState } from 'react';
 import { Habit, HabitType, HabitUnit, SubTask } from '../types';
-import { Trash2, Calendar, Plus, ListTodo, Check } from 'lucide-react';
+import { Trash2, Calendar, Clock, Plus, ListTodo, Check, X } from 'lucide-react';
 import { UNITS, getRandomIcon, getRandomColor } from '../lib/constants';
 import { addDays, endOfMonth } from 'date-fns';
-import { generateId, normalizeDateStr } from '../lib/habitUtils';
+import { generateId, normalizeDateStr, taskDateStr } from '../lib/habitUtils';
+import { minutesToInput } from '../lib/plannerUtils';
 import {
   FormShell, IdentityField, GroupField, TypeToggle, FormFooter,
   LABEL_CLASS, INPUT_BOX_CLASS, accentClasses,
@@ -35,9 +36,13 @@ export function TaskForm({ initialTask, existingGroups = [], onSave, onCancel, o
   const [type, setType] = useState<HabitType>(initialTask?.type || 'START');
   const [unit, setUnit] = useState<HabitUnit>(initialTask?.unit || 'amount');
   const [quota, setQuota] = useState(initialTask?.quota || 1);
+  // New tasks default to a deadline of today; existing tasks keep whatever they had
+  const [hasDeadline, setHasDeadline] = useState(initialTask ? Boolean(initialTask.targetDate) : true);
   const [targetDate, setTargetDate] = useState(() =>
-    normalizeDateStr(initialTask?.targetDate || initialTask?.startDate || new Date())
+    normalizeDateStr(initialTask?.targetDate || new Date())
   );
+  // "HH:mm", or empty for no particular time
+  const [dueTime, setDueTime] = useState(initialTask?.dueTime !== undefined ? minutesToInput(initialTask.dueTime) : '');
 
   const [subtasks, setSubtasks] = useState<SubTask[]>(initialTask?.subtasks || []);
   const [newSubtaskTitle, setNewSubtaskTitle] = useState('');
@@ -62,7 +67,19 @@ export function TaskForm({ initialTask, existingGroups = [], onSave, onCancel, o
     e.preventDefault();
     if (!name.trim()) return;
 
-    const normalizedTarget = normalizeDateStr(targetDate || new Date());
+    const deadline = hasDeadline ? normalizeDateStr(targetDate || new Date()) : undefined;
+    // Without a deadline, progress is logged under the day the task was created
+    const startDate = deadline ?? normalizeDateStr(initialTask?.startDate || new Date());
+
+    // Progress is stored under the task's date, so carry it over if that date changes
+    let logs = initialTask?.logs || {};
+    const oldKey = initialTask ? taskDateStr(initialTask) : null;
+    const newKey = deadline ?? startDate;
+    if (oldKey && oldKey !== newKey && logs[oldKey] !== undefined) {
+      logs = { ...logs, [newKey]: logs[oldKey] };
+      delete logs[oldKey];
+    }
+
     onSave({
       id: initialTask?.id || generateId(),
       name: name.trim(),
@@ -74,9 +91,10 @@ export function TaskForm({ initialTask, existingGroups = [], onSave, onCancel, o
       quota: quota || 1,
       timeframe: 'daily',
       isRecurring: false,
-      targetDate: normalizedTarget,
-      startDate: normalizedTarget,
-      logs: initialTask?.logs || {},
+      targetDate: deadline,
+      dueTime: deadline && dueTime ? Number(dueTime.slice(0, 2)) * 60 + Number(dueTime.slice(3, 5)) : undefined,
+      startDate,
+      logs,
       subtasks: subtasks.length > 0 ? subtasks : undefined,
     });
   };
@@ -110,31 +128,91 @@ export function TaskForm({ initialTask, existingGroups = [], onSave, onCancel, o
         emptyHint="No groups created yet. Type above to assign a group."
       />
 
-      {/* Due Date Picker & Quick Presets */}
+      {/* Optional deadline & quick presets */}
       <div>
-        <label className={`${LABEL_CLASS} mb-1.5`}>Target Due Date</label>
-        <div className={`gap-2 ${INPUT_BOX_CLASS} px-3 py-1.5 ${focusWithin}`}>
-          <Calendar size={14} className="text-purple-400 shrink-0" />
-          <input
-            type="date"
-            required
-            className="w-full bg-transparent text-xs font-semibold text-white focus:outline-none cursor-pointer"
-            value={targetDate}
-            onChange={e => setTargetDate(e.target.value)}
-          />
-        </div>
+        <label className={`${LABEL_CLASS} mb-1.5`}>
+          Deadline <span className="text-gray-500 font-normal normal-case">(optional)</span>
+        </label>
+        {hasDeadline ? (
+          <div className="flex items-center gap-2">
+            <div className={`flex-1 gap-2 ${INPUT_BOX_CLASS} px-3 py-1.5 ${focusWithin}`}>
+              <Calendar size={14} className="text-purple-400 shrink-0" />
+              <input
+                type="date"
+                required
+                aria-label="Due date"
+                className="w-full bg-transparent text-xs font-semibold text-white focus:outline-none cursor-pointer"
+                value={targetDate}
+                onChange={e => setTargetDate(e.target.value)}
+              />
+              <button
+                type="button"
+                aria-label="Remove deadline"
+                title="Remove deadline"
+                onClick={() => setHasDeadline(false)}
+                className="text-gray-500 hover:text-white shrink-0"
+              >
+                <X size={12} />
+              </button>
+            </div>
+            <div className={`w-36 gap-2 ${INPUT_BOX_CLASS} px-3 py-1.5 ${focusWithin}`}>
+              <Clock size={14} className="text-purple-400 shrink-0" />
+              <input
+                type="time"
+                step={900}
+                aria-label="Due time"
+                className="w-full bg-transparent text-xs font-semibold text-white focus:outline-none cursor-pointer"
+                value={dueTime}
+                onChange={e => setDueTime(e.target.value)}
+              />
+              {dueTime && (
+                <button
+                  type="button"
+                  aria-label="Clear time"
+                  onClick={() => setDueTime('')}
+                  className="text-gray-500 hover:text-white shrink-0"
+                >
+                  <X size={12} />
+                </button>
+              )}
+            </div>
+          </div>
+        ) : (
+          <button
+            type="button"
+            onClick={() => setHasDeadline(true)}
+            className="w-full flex items-center gap-2 px-3 py-2 rounded-xl border border-dashed border-gray-700 text-xs font-semibold text-gray-400 hover:text-white hover:border-gray-500 transition"
+          >
+            <Calendar size={14} className="text-purple-400 shrink-0" />
+            No deadline · add one
+          </button>
+        )}
 
         <div className="flex gap-1.5 flex-wrap mt-2">
           {DATE_PRESETS.map(p => (
             <button
               key={p.label}
               type="button"
-              onClick={() => setTargetDate(normalizeDateStr(p.getDate(new Date())))}
+              onClick={() => {
+                setHasDeadline(true);
+                setTargetDate(normalizeDateStr(p.getDate(new Date())));
+              }}
               className="px-2 py-0.5 rounded-lg text-[10px] font-semibold bg-gray-800/60 hover:bg-gray-700 text-gray-400 hover:text-white border border-gray-700/40 transition"
             >
               {p.label}
             </button>
           ))}
+          <button
+            type="button"
+            onClick={() => setHasDeadline(false)}
+            className={`px-2 py-0.5 rounded-lg text-[10px] font-semibold border transition ${
+              hasDeadline
+                ? 'bg-gray-800/60 hover:bg-gray-700 text-gray-400 hover:text-white border-gray-700/40'
+                : 'bg-purple-500/20 text-purple-300 border-purple-500/40'
+            }`}
+          >
+            No deadline
+          </button>
         </div>
       </div>
 

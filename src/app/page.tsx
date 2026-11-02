@@ -9,15 +9,16 @@ import { DailyPlanner } from '../components/DailyPlanner';
 import { HabitForm } from '../components/HabitForm';
 import { TaskForm } from '../components/TaskForm';
 import { HabitCard, leftColumnClass } from '../components/HabitCard';
-import { OneOffTaskCard } from '../components/OneOffTaskCard';
 import { HabitInsightsModal } from '../components/HabitInsightsModal';
+import { OneOffTasksSection } from '../components/OneOffTasksSection';
+import { GroupedList } from '../components/GroupedList';
 import {
-  PlusCircle, ChevronLeft, ChevronRight, Hash, Layers, Grid,
-  Target, Trash2, Search, Filter, X, Tag, Database, Sparkles, Plus
+  SearchToggle, FilterButton, SegmentFilter, GroupFilter, ClearFiltersButton, matchesSearch, matchesGroup,
+} from '../components/ListControls';
+import {
+  PlusCircle, ChevronLeft, ChevronRight, Hash, Layers, Grid, Tag, Database, Sparkles, Plus
 } from 'lucide-react';
-import {
-  normalizeDateStr, isHabitMetOn, isTaskComplete, taskDateStr, WEEK_OPTIONS, getExistingGroups,
-} from '../lib/habitUtils';
+import { normalizeDateStr, isHabitMetOn, WEEK_OPTIONS, getExistingGroups } from '../lib/habitUtils';
 import { getSampleHabits } from '../lib/sampleHabits';
 import {
   addDays, addWeeks, addMonths, addYears, isSameDay, format, getDaysInMonth,
@@ -26,40 +27,7 @@ import {
 } from 'date-fns';
 import { Habit, HabitType, Timeframe, ViewMode } from '../types';
 
-const UNGROUPED = '__ungrouped__';
 const STEP_VIEW = { day: addDays, week: addWeeks, month: addMonths, year: addYears };
-
-interface CategoryGroup<T> {
-  name: string;
-  isUngrouped: boolean;
-  items: T[];
-}
-
-/** Buckets items by group name (in first-seen order), with ungrouped items last. */
-function groupItemsByCategory<T extends { group?: string }>(items: T[]): CategoryGroup<T>[] {
-  const groupMap = new Map<string, T[]>();
-  const ungrouped: T[] = [];
-
-  for (const item of items) {
-    const g = item.group?.trim();
-    if (!g) {
-      ungrouped.push(item);
-      continue;
-    }
-    if (!groupMap.has(g)) groupMap.set(g, []);
-    groupMap.get(g)!.push(item);
-  }
-
-  const result: CategoryGroup<T>[] = [...groupMap].map(([name, list]) => ({ name, isUngrouped: false, items: list }));
-  if (ungrouped.length > 0) {
-    result.push({ name: 'General / Other', isUngrouped: true, items: ungrouped });
-  }
-  return result;
-}
-
-function sortTasksByUpcoming(tasks: Habit[]) {
-  return [...tasks].sort((a, b) => taskDateStr(a).localeCompare(taskDateStr(b)) || a.name.localeCompare(b.name));
-}
 
 /* ---------- Small presentational pieces ---------- */
 
@@ -80,88 +48,6 @@ function ToggleChip({ active, onClick, icon, label, activeClass }: {
       {icon}
       <span>{label} {active ? 'ON' : 'OFF'}</span>
     </button>
-  );
-}
-
-function SegmentFilter<T extends string>({ label, value, onChange, options, activeClass }: {
-  label: string;
-  value: T;
-  onChange: (v: T) => void;
-  options: { value: T; label: string }[];
-  activeClass: string;
-}) {
-  return (
-    <div className="flex items-center gap-1.5">
-      <span className="text-[11px] font-bold uppercase text-gray-400 tracking-wider">{label}:</span>
-      <div className="flex bg-[#141620] p-0.5 rounded-lg border border-gray-800">
-        {options.map(o => (
-          <button
-            key={o.value}
-            onClick={() => onChange(o.value)}
-            className={`px-2.5 py-1 rounded text-[11px] font-semibold transition capitalize ${
-              value === o.value ? `${activeClass} text-white shadow-sm` : 'text-gray-400 hover:text-white'
-            }`}
-          >
-            {o.label}
-          </button>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-function GroupChip({ active, onClick, children }: { active: boolean; onClick: () => void; children: React.ReactNode }) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={`px-2.5 py-0.5 rounded-lg text-[11px] font-semibold transition border ${
-        active
-          ? 'bg-purple-600 text-white border-purple-500 shadow-sm'
-          : 'bg-[#141620] text-gray-400 hover:text-white border-gray-800'
-      }`}
-    >
-      {children}
-    </button>
-  );
-}
-
-function GroupHeader({ name, count, noun, className = '' }: { name: string; count: number; noun: string; className?: string }) {
-  return (
-    <div className={`w-full flex items-center justify-between bg-[#0e1117] border-y border-gray-800/90 py-1.5 px-3 select-none ${className}`}>
-      <div className="flex items-center gap-2">
-        <Layers size={13} className="text-purple-400 shrink-0" />
-        <span className="text-xs font-bold text-gray-200 tracking-wide uppercase">{name}</span>
-        <span className="text-[10px] font-semibold text-gray-400 bg-gray-900 px-2 py-0.5 rounded-full border border-gray-700/60">
-          {count} {count === 1 ? noun : `${noun}s`}
-        </span>
-      </div>
-    </div>
-  );
-}
-
-/** Renders items under group headers when grouping applies, otherwise as one flat list. */
-function GroupedList<T extends Habit>({ groups, flatItems, grouped, noun, headerClassName, renderItem }: {
-  groups: CategoryGroup<T>[];
-  flatItems: T[];
-  grouped: boolean;
-  noun: string;
-  headerClassName?: string;
-  renderItem: (item: T) => React.ReactNode;
-}) {
-  const list = (items: T[]) => (
-    <div className="flex flex-col gap-0 divide-y divide-gray-800/80">{items.map(renderItem)}</div>
-  );
-  if (!grouped || !groups.some(g => !g.isUngrouped)) return list(flatItems);
-  return (
-    <>
-      {groups.map(grp => (
-        <div key={grp.name} className="flex flex-col">
-          <GroupHeader name={grp.name} count={grp.items.length} noun={noun} className={headerClassName} />
-          {list(grp.items)}
-        </div>
-      ))}
-    </>
   );
 }
 
@@ -199,6 +85,8 @@ function Home() {
   const [showTaskForm, setShowTaskForm] = useState(false);
   const [editingTaskId, setEditingTaskId] = useState<string | null>(null);
   const [insightsHabitId, setInsightsHabitId] = useState<string | null>(null);
+  // Links a task row and its marker on the daily planner while either is hovered
+  const [hoveredTaskId, setHoveredTaskId] = useState<string | null>(null);
 
   // Grid view
   const [selectedDate, setSelectedDate] = useState(initialView.date);
@@ -208,14 +96,13 @@ function Home() {
   const [categoryGroupingEnabled, setCategoryGroupingEnabled] = useState(true);
   const [showBorders, setShowBorders] = useState(false);
 
-  // Filters
+  // Habit filters (the task list has its own)
   const [searchQuery, setSearchQuery] = useState('');
   const [filterType, setFilterType] = useState<'all' | HabitType>('all');
   const [filterStatus, setFilterStatus] = useState<'all' | 'pending' | 'completed'>('all');
   const [filterTimeframe, setFilterTimeframe] = useState<'all' | Timeframe>('all');
   const [filterGroup, setFilterGroup] = useState<'all' | string>('all');
   const [showFilterBar, setShowFilterBar] = useState(false);
-  const [searchOpen, setSearchOpen] = useState(false);
 
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const [canScrollLeft, setCanScrollLeft] = useState(false);
@@ -249,32 +136,17 @@ function Home() {
 
   const recurringHabits = useMemo(() => habits.filter(h => h.isRecurring !== false), [habits]);
   const oneOffTasks = useMemo(() => habits.filter(h => h.isRecurring === false), [habits]);
-  const completedTaskIds = useMemo(() => oneOffTasks.filter(isTaskComplete).map(t => t.id), [oneOffTasks]);
 
   const existingGroups = useMemo(() => getExistingGroups(habits), [habits]);
+  const habitGroups = useMemo(() => getExistingGroups(recurringHabits), [recurringHabits]);
 
-  const matchesFilter = useCallback((h: Habit): boolean => {
-    const q = searchQuery.trim().toLowerCase();
-    if (q && !h.name.toLowerCase().includes(q) && !h.group?.toLowerCase().includes(q)) return false;
-    if (filterType !== 'all' && h.type !== filterType) return false;
-    if (filterTimeframe !== 'all' && h.isRecurring !== false && h.timeframe !== filterTimeframe) return false;
-    if (filterGroup === UNGROUPED) {
-      if (h.group?.trim()) return false;
-    } else if (filterGroup !== 'all' && h.group?.trim().toLowerCase() !== filterGroup.toLowerCase()) {
-      return false;
-    }
-    if (filterStatus !== 'all') {
-      const isDone = h.isRecurring === false ? isTaskComplete(h) : isHabitMetOn(h, selectedDate);
-      if (isDone !== (filterStatus === 'completed')) return false;
-    }
-    return true;
-  }, [searchQuery, filterType, filterTimeframe, filterGroup, filterStatus, selectedDate]);
-
-  const filteredRecurringHabits = useMemo(() => recurringHabits.filter(matchesFilter), [recurringHabits, matchesFilter]);
-  const sortedOneOffTasks = useMemo(() => sortTasksByUpcoming(oneOffTasks.filter(matchesFilter)), [oneOffTasks, matchesFilter]);
-
-  const groupedRecurringHabits = useMemo(() => groupItemsByCategory(filteredRecurringHabits), [filteredRecurringHabits]);
-  const groupedOneOffTasks = useMemo(() => groupItemsByCategory(sortedOneOffTasks), [sortedOneOffTasks]);
+  const filteredRecurringHabits = useMemo(() => recurringHabits.filter(h =>
+    matchesSearch(h, searchQuery)
+    && (filterType === 'all' || h.type === filterType)
+    && (filterTimeframe === 'all' || h.timeframe === filterTimeframe)
+    && matchesGroup(h, filterGroup)
+    && (filterStatus === 'all' || isHabitMetOn(h, selectedDate) === (filterStatus === 'completed'))
+  ), [recurringHabits, searchQuery, filterType, filterTimeframe, filterGroup, filterStatus, selectedDate]);
 
   const activeFiltersCount = [
     searchQuery.trim(), filterType !== 'all', filterStatus !== 'all', filterTimeframe !== 'all', filterGroup !== 'all',
@@ -352,15 +224,6 @@ function Home() {
     />
   );
 
-  const renderTaskCard = (task: Habit) => (
-    <OneOffTaskCard
-      key={task.id}
-      task={task}
-      onEdit={() => setEditingTaskId(task.id)}
-      onUpdateTask={updateHabit}
-    />
-  );
-
   return (
     <div className="space-y-6">
       <header className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-gray-800/80 pb-4">
@@ -391,7 +254,11 @@ function Home() {
       </header>
 
       <div className="grid grid-cols-1 xl:grid-cols-[340px_minmax(0,1fr)] gap-6 items-start">
-        <DailyPlanner />
+        <DailyPlanner
+          highlightedTaskId={hoveredTaskId}
+          onHoverTask={setHoveredTaskId}
+          onEditTask={setEditingTaskId}
+        />
 
         <div className="space-y-6 min-w-0">
           {/* Modals */}
@@ -478,67 +345,13 @@ function Home() {
                     Jump to today
                   </button>
 
-                  {/* Search: an icon until opened */}
-                  {searchOpen || searchQuery ? (
-                    <div className="relative">
-                      <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
-                      <input
-                        type="text"
-                        autoFocus
-                        value={searchQuery}
-                        onChange={(e) => setSearchQuery(e.target.value)}
-                        onBlur={() => { if (!searchQuery) setSearchOpen(false); }}
-                        onKeyDown={(e) => {
-                          if (e.key === 'Escape') {
-                            setSearchQuery('');
-                            setSearchOpen(false);
-                          }
-                        }}
-                        placeholder="Search habits & tasks..."
-                        aria-label="Search habits and tasks"
-                        className="w-48 bg-gray-900 border border-gray-700 focus:border-blue-500 rounded-lg pl-8 pr-7 py-1 text-xs text-white placeholder-gray-500 focus:outline-none transition"
-                      />
-                      <button
-                        type="button"
-                        aria-label="Clear search"
-                        onMouseDown={(e) => e.preventDefault()}
-                        onClick={() => { setSearchQuery(''); setSearchOpen(false); }}
-                        className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-white"
-                      >
-                        <X size={12} />
-                      </button>
-                    </div>
-                  ) : (
-                    <button
-                      type="button"
-                      aria-label="Search habits and tasks"
-                      title="Search"
-                      onClick={() => setSearchOpen(true)}
-                      className="p-1.5 rounded-lg bg-gray-900 hover:bg-gray-800 text-gray-400 hover:text-white border border-gray-700 transition"
-                    >
-                      <Search size={14} />
-                    </button>
-                  )}
-
-                  <button
-                    type="button"
-                    aria-label="Filters"
-                    aria-expanded={showFilterBar}
-                    title="Filters"
+                  <SearchToggle value={searchQuery} onChange={setSearchQuery} label="Search habits" />
+                  <FilterButton
+                    open={showFilterBar}
+                    activeCount={activeFiltersCount}
                     onClick={() => setShowFilterBar(!showFilterBar)}
-                    className={`relative p-1.5 rounded-lg border transition ${
-                      showFilterBar || activeFiltersCount > 0
-                        ? 'bg-blue-600/20 text-blue-400 border-blue-500/40'
-                        : 'bg-gray-900 hover:bg-gray-800 text-gray-400 hover:text-white border-gray-700'
-                    }`}
-                  >
-                    <Filter size={14} />
-                    {activeFiltersCount > 0 && (
-                      <span className="absolute -top-1.5 -right-1.5 min-w-4 h-4 px-1 rounded-full bg-blue-500 text-white text-[9px] font-bold flex items-center justify-center">
-                        {activeFiltersCount}
-                      </span>
-                    )}
-                  </button>
+                    label="Habit filters"
+                  />
                 </div>
 
                 {/* View Mode Toggle & Applicable Toggles */}
@@ -631,45 +444,10 @@ function Home() {
                         { value: 'monthly', label: 'monthly' },
                       ]}
                     />
-                    {activeFiltersCount > 0 && (
-                      <button
-                        type="button"
-                        onClick={clearAllFilters}
-                        className="ml-auto px-2.5 py-1 rounded-lg text-[11px] font-semibold text-red-400 hover:bg-red-500/10 transition flex items-center gap-1"
-                      >
-                        <X size={12} />
-                        <span>Clear filters</span>
-                      </button>
-                    )}
+                    {activeFiltersCount > 0 && <ClearFiltersButton onClick={clearAllFilters} />}
                   </div>
 
-                  {existingGroups.length > 0 && (
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <span className="text-[11px] font-bold uppercase text-gray-400 tracking-wider flex items-center gap-1">
-                        <Tag size={11} className="text-purple-400" />
-                        Group:
-                      </span>
-                      <div className="flex gap-1.5 flex-wrap">
-                        <GroupChip active={filterGroup === 'all'} onClick={() => setFilterGroup('all')}>
-                          All Groups
-                        </GroupChip>
-                        {existingGroups.map(g => {
-                          const active = filterGroup.toLowerCase() === g.toLowerCase();
-                          return (
-                            <GroupChip key={g} active={active} onClick={() => setFilterGroup(active ? 'all' : g)}>
-                              {g}
-                            </GroupChip>
-                          );
-                        })}
-                        <GroupChip
-                          active={filterGroup === UNGROUPED}
-                          onClick={() => setFilterGroup(filterGroup === UNGROUPED ? 'all' : UNGROUPED)}
-                        >
-                          Ungrouped
-                        </GroupChip>
-                      </div>
-                    </div>
-                  )}
+                  <GroupFilter groups={habitGroups} value={filterGroup} onChange={setFilterGroup} />
                 </div>
               )}
 
@@ -776,8 +554,7 @@ function Home() {
                       </div>
                     ) : (
                       <GroupedList
-                        groups={groupedRecurringHabits}
-                        flatItems={filteredRecurringHabits}
+                        items={filteredRecurringHabits}
                         grouped={categoryGroupingEnabled}
                         noun="habit"
                         headerClassName="sticky left-0 z-10"
@@ -838,73 +615,15 @@ function Home() {
             </div>
           )}
 
-          {/* Section 2: One-Off Tasks & Goals Table */}
-          {oneOffTasks.length > 0 ? (
-            <div className="bg-[#090a0d] border border-gray-800 rounded-xl overflow-hidden shadow-2xl">
-              <div className="flex items-center justify-between p-3 border-b border-gray-800 bg-[#0e1015] gap-3 flex-wrap">
-                <div className="flex items-center gap-2.5">
-                  <div className="w-7 h-7 rounded-lg bg-purple-500/10 border border-purple-500/20 text-purple-400 flex items-center justify-center">
-                    <Target size={15} />
-                  </div>
-                  <h3 className="text-xs font-bold text-white tracking-wide uppercase">
-                    One-Off Tasks & Goals ({sortedOneOffTasks.length})
-                  </h3>
-                </div>
-
-                <div className="flex items-center gap-2 flex-wrap">
-                  <span className="text-xs font-semibold px-3 py-1 rounded-lg bg-gray-900 border border-gray-700/60 text-gray-300">
-                    <span className="text-emerald-400 font-bold">{completedTaskIds.length}</span> of {oneOffTasks.length} completed
-                  </span>
-
-                  {completedTaskIds.length > 0 && (
-                    <button
-                      onClick={() => deleteHabits(completedTaskIds)}
-                      className="px-2.5 py-1 text-xs font-semibold rounded-lg bg-red-500/10 text-red-400 hover:bg-red-500/20 border border-red-500/30 transition flex items-center gap-1.5 shadow-sm"
-                    >
-                      <Trash2 size={12} />
-                      <span>Clear Completed ({completedTaskIds.length})</span>
-                    </button>
-                  )}
-                </div>
-              </div>
-
-              {sortedOneOffTasks.length === 0 ? (
-                <div className="py-8 text-center text-gray-500 text-xs">
-                  No one-off tasks match the active filters.
-                </div>
-              ) : (
-                <GroupedList
-                  groups={groupedOneOffTasks}
-                  flatItems={sortedOneOffTasks}
-                  grouped={categoryGroupingEnabled}
-                  noun="task"
-                  renderItem={renderTaskCard}
-                />
-              )}
-
-              {/* Add New One-Off Task Row at Bottom */}
-              <div
-                onClick={() => setShowTaskForm(true)}
-                className="bg-[#0b0c10] border-t border-gray-800/80 py-2.5 px-4 flex items-center justify-center cursor-pointer hover:bg-[#12141a] transition-all group"
-              >
-                <div className="flex items-center gap-2 text-gray-500 group-hover:text-purple-400 transition-colors">
-                  <PlusCircle size={15} />
-                  <span className="text-xs font-semibold">Add New One-Off Task</span>
-                </div>
-              </div>
-            </div>
-          ) : (
-            <div className="bg-[#090a0d] border border-gray-800 rounded-xl p-6 text-center text-gray-500 shadow-xl">
-              <p className="text-sm">No one-off tasks added yet.</p>
-              <button
-                onClick={() => setShowTaskForm(true)}
-                className="mt-3 inline-flex items-center gap-1.5 text-xs font-bold text-purple-400 hover:text-purple-300 bg-purple-500/10 px-3 py-1.5 rounded-lg border border-purple-500/20 transition"
-              >
-                <PlusCircle size={14} />
-                <span>Create One-Off Task</span>
-              </button>
-            </div>
-          )}
+          <OneOffTasksSection
+            tasks={oneOffTasks}
+            onAdd={() => setShowTaskForm(true)}
+            onEdit={setEditingTaskId}
+            onUpdateTask={updateHabit}
+            onDeleteTasks={deleteHabits}
+            hoveredTaskId={hoveredTaskId}
+            onHoverTask={setHoveredTaskId}
+          />
         </div>
       </div>
     </div>
