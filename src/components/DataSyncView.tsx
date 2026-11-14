@@ -5,6 +5,7 @@ import { Habit, PlanBlock } from '../types';
 import { getSampleHabits } from '../lib/sampleHabits';
 import { useHabits } from '../context/HabitsContext';
 import { usePlanner } from '../context/PlannerContext';
+import { SyncCard } from './SyncCard';
 import {
   Download, Upload, Sparkles, Trash2, Database,
   CheckCircle2, AlertTriangle, ShieldCheck, FileJson
@@ -118,6 +119,8 @@ export function DataSyncView() {
           </div>
         </div>
       </div>
+
+      <SyncCard />
 
       {/* Feedback Banner */}
       {feedback && (
@@ -288,7 +291,7 @@ export function DataSyncView() {
       <div className="flex items-start gap-2.5 p-3 rounded-xl bg-gray-900/50 border border-gray-800/60 text-xs text-gray-400">
         <ShieldCheck size={16} className="text-emerald-400 shrink-0 mt-0.5" />
         <p>
-          <strong className="text-gray-300">Privacy First:</strong> Your data is stored locally in your browser storage and never sent to external servers. Export backups anytime to sync between your phone, tablet, and PC.
+          <strong className="text-gray-300">Your data:</strong> Everything is saved in this browser. If you sign in to sync, a copy is also kept in your private cloud account so your other devices can use it. Nobody else can read it.
         </p>
       </div>
     </div>

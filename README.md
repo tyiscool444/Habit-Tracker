@@ -17,7 +17,7 @@ Built with Next.js, React, TypeScript, and Tailwind CSS.
 - Floating Timer: Persistent floating widget (and a sidebar countdown) to monitor active focus sessions while navigating the app.
 - Calendar and Streaks: Monthly calendar view with streak tracking and upcoming task schedules.
 - Data Backup and Sync: Export and import habits, logs, and daily plans via JSON files. Includes starter templates for testing.
-- Privacy First: Data is stored locally in the browser via localStorage. No external database or account creation required.
+- Cloud Sync (optional): Unlock the site with your password on your PC and phone and your habits, tasks and plans stay in sync. Without it, everything simply stays in the browser.
 
 ---
 
@@ -53,6 +53,32 @@ npm run dev
 - `npm run build`: Creates an optimized production build.
 - `npm run start`: Runs the built production server.
 - `npm run lint`: Runs ESLint checks.
+
+---
+
+## Cloud sync (optional)
+
+Keeps the same data on your PC and phone, behind a single password. Sync uses a free [Supabase](https://supabase.com) project; until it's set up, the app keeps data only in the browser and has no password.
+
+1. **Create a project** at supabase.com (the free plan is plenty).
+2. **Create the table:** in the project, open *SQL Editor → New query*, paste the contents of [`supabase/schema.sql`](supabase/schema.sql), and click *Run*.
+3. **Create your login:** under *Authentication → Users*, click *Add user → Create new user*, enter any email address and the password you want to use, and tick *Auto Confirm User*.
+4. **Block other sign-ups:** under *Authentication → Sign In / Providers*, turn off *Allow new users to sign up*.
+5. **Add the settings** (the URL and *anon public* key are under *Project Settings → API*):
+   ```
+   NEXT_PUBLIC_SUPABASE_URL=...
+   NEXT_PUBLIC_SUPABASE_ANON_KEY=...
+   NEXT_PUBLIC_SUPABASE_LOGIN_EMAIL=the email from step 3
+   ```
+   - Locally: copy `.env.example` to `.env.local`, fill it in, and restart `npm run dev`.
+   - On Vercel: add the same three under *Settings → Environment Variables*, then redeploy.
+6. **Open the site** on each device and enter your password. Each device stays unlocked until you press *Lock* on the Data & Backup page.
+
+How it behaves:
+- Changes upload a second or two after you make them, and other open devices update straight away.
+- A device always downloads the latest data before uploading, so an out-of-date phone can't overwrite newer work.
+- The first time a device unlocks, if it already has different data from the cloud, you choose which copy to keep.
+- If two devices edit while both are offline, the most recent edit wins once they reconnect.
 
 ---
 

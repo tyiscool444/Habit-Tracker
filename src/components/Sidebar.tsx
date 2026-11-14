@@ -2,8 +2,11 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { CalendarDays, Database, LayoutDashboard, PanelLeftClose, PanelLeftOpen, Timer } from 'lucide-react';
+import {
+  AlertTriangle, CalendarDays, Cloud, CloudOff, Database, LayoutDashboard, Loader2, PanelLeftClose, PanelLeftOpen, Timer,
+} from 'lucide-react';
 import { useHabitTimer } from '../context/TimerContext';
+import { useSync, SyncStatus } from '../context/SyncContext';
 import { usePersistentState } from '../hooks/usePersistentState';
 import { formatTime } from '../lib/timerTechniques';
 
@@ -14,10 +17,23 @@ const NAV_ITEMS = [
   { href: '/data', label: 'Data & Backup', icon: Database, accent: 'text-emerald-400' },
 ];
 
+// Cloud sync indicator; hidden when sync isn't set up
+const SYNC_DISPLAY: Record<SyncStatus, { label: string; icon: typeof Cloud; className: string } | null> = {
+  disabled: null,
+  'signed-out': null, // the password screen covers the app while locked
+  syncing: { label: 'Syncing…', icon: Loader2, className: 'text-blue-400 animate-spin' },
+  synced: { label: 'Synced', icon: Cloud, className: 'text-emerald-400' },
+  offline: { label: 'Offline, will sync later', icon: CloudOff, className: 'text-amber-400' },
+  error: { label: 'Sync problem', icon: AlertTriangle, className: 'text-red-400' },
+  conflict: { label: 'Sync needs a choice', icon: AlertTriangle, className: 'text-amber-400' },
+};
+
 export function Sidebar() {
   const pathname = usePathname();
   const [collapsed, setCollapsed] = usePersistentState('habitthat_sidebar_collapsed', false);
   const { isActive, isRunning, mode, remainingSeconds } = useHabitTimer();
+  const { status: syncStatus } = useSync();
+  const sync = SYNC_DISPLAY[syncStatus];
 
   return (
     <aside
@@ -68,6 +84,17 @@ export function Sidebar() {
           );
         })}
       </nav>
+
+      {sync && (
+        <Link
+          href="/data"
+          title={sync.label}
+          className="flex items-center gap-3 mx-2.5 px-3 py-2 rounded-xl text-xs font-semibold text-gray-400 hover:text-white hover:bg-[#12141c] transition"
+        >
+          <sync.icon size={16} className={`shrink-0 ${sync.className}`} />
+          <span className={`truncate hidden ${collapsed ? '' : 'md:inline'}`}>{sync.label}</span>
+        </Link>
+      )}
 
       <button
         type="button"

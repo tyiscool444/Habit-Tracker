@@ -4,6 +4,7 @@ import { useState, useMemo, useRef, useEffect, useCallback, Suspense } from 'rea
 import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { useHabits } from '../context/HabitsContext';
+import { usePersistentState } from '../hooks/usePersistentState';
 import { Modal } from '../components/Modal';
 import { DailyPlanner } from '../components/DailyPlanner';
 import { HabitForm } from '../components/HabitForm';
@@ -54,14 +55,17 @@ function ToggleChip({ active, onClick, icon, label, activeClass }: {
 const VIEW_MODES: ViewMode[] = ['day', 'week', 'month', 'year'];
 
 /** Other pages link here as /?date=YYYY-MM-DD&view=day to open the grid on a specific day. */
-function readInitialView(params: URLSearchParams): { date: Date; view: ViewMode } {
+function readInitialView(params: URLSearchParams): { date: Date; view: ViewMode | undefined } {
   const date = parseISO(params.get('date') || '');
   const view = params.get('view') as ViewMode;
   return {
     date: isValid(date) ? date : new Date(),
-    view: VIEW_MODES.includes(view) ? view : 'week',
+    view: VIEW_MODES.includes(view) ? view : undefined,
   };
 }
+
+// View settings and filters are remembered between visits under these keys
+const prefKey = (name: string) => `habitthat_home_${name}`;
 
 /* ---------- Page ---------- */
 
@@ -90,18 +94,18 @@ function Home() {
 
   // Grid view
   const [selectedDate, setSelectedDate] = useState(initialView.date);
-  const [viewMode, setViewMode] = useState<ViewMode>(initialView.view);
-  const [showNumbers, setShowNumbers] = useState(true);
-  const [cellGroupingEnabled, setCellGroupingEnabled] = useState(true);
-  const [categoryGroupingEnabled, setCategoryGroupingEnabled] = useState(true);
-  const [showBorders, setShowBorders] = useState(false);
+  const [viewMode, setViewMode] = usePersistentState<ViewMode>(prefKey('view'), 'week', initialView.view);
+  const [showNumbers, setShowNumbers] = usePersistentState(prefKey('numbers'), true);
+  const [cellGroupingEnabled, setCellGroupingEnabled] = usePersistentState(prefKey('cell_grouping'), true);
+  const [categoryGroupingEnabled, setCategoryGroupingEnabled] = usePersistentState(prefKey('groups'), true);
+  const [showBorders, setShowBorders] = usePersistentState(prefKey('borders'), false);
 
   // Habit filters (the task list has its own)
   const [searchQuery, setSearchQuery] = useState('');
-  const [filterType, setFilterType] = useState<'all' | HabitType>('all');
-  const [filterStatus, setFilterStatus] = useState<'all' | 'pending' | 'completed'>('all');
-  const [filterTimeframe, setFilterTimeframe] = useState<'all' | Timeframe>('all');
-  const [filterGroup, setFilterGroup] = useState<'all' | string>('all');
+  const [filterType, setFilterType] = usePersistentState<'all' | HabitType>(prefKey('filter_type'), 'all');
+  const [filterStatus, setFilterStatus] = usePersistentState<'all' | 'pending' | 'completed'>(prefKey('filter_status'), 'all');
+  const [filterTimeframe, setFilterTimeframe] = usePersistentState<'all' | Timeframe>(prefKey('filter_timeframe'), 'all');
+  const [filterGroup, setFilterGroup] = usePersistentState<'all' | string>(prefKey('filter_group'), 'all');
   const [showFilterBar, setShowFilterBar] = useState(false);
 
   const scrollContainerRef = useRef<HTMLDivElement>(null);
@@ -617,7 +621,7 @@ function Home() {
 
           <OneOffTasksSection
             tasks={oneOffTasks}
-            onAdd={() => setShowTaskForm(true)}
+            onCreateTask={addHabit}
             onEdit={setEditingTaskId}
             onUpdateTask={updateHabit}
             onDeleteTasks={deleteHabits}

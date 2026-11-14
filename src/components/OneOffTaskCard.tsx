@@ -88,13 +88,14 @@ export function OneOffTaskCard({ task, onEdit, onUpdateTask, highlighted = false
       <div
         onMouseEnter={() => onHoverChange?.(true)}
         onMouseLeave={() => onHoverChange?.(false)}
-        className={`w-full flex items-center justify-between px-3.5 py-2 transition-colors group min-h-[52px] ${
+        className={`w-full flex flex-wrap items-center justify-between gap-x-3 gap-y-1.5 px-3.5 py-2 transition-colors group min-h-[52px] ${
           highlighted ? 'bg-[#141924]' : 'bg-[#0c0d10] hover:bg-[#101115]'
         }`}
         style={highlighted ? { boxShadow: `inset 3px 0 0 ${task.color}, inset 0 0 0 1px ${task.color}66` } : undefined}
       >
         {/* Left Column: Checkbox + Icon + Name + Group + Due Date + Subtasks Toggle Badge */}
-        <div className="flex items-center gap-2.5 min-w-0 flex-1 mr-3">
+        {/* Grows to fill the row; below ~10rem the amount controls wrap onto their own line */}
+        <div className="flex items-center gap-2.5 min-w-0 flex-[1_1_10rem]">
           {/* Checkbox Complete Button */}
           <button
             type="button"
@@ -117,18 +118,18 @@ export function OneOffTaskCard({ task, onEdit, onUpdateTask, highlighted = false
             {task.icon}
           </div>
 
-          {/* Task Name & Tags */}
-          <div className="flex items-center gap-2 min-w-0 flex-1 flex-wrap">
+          {/* Task name, with its tags on the line below (fits narrow columns) */}
+          <div className="flex flex-col items-start gap-1 min-w-0 flex-1">
             <h3
               onClick={onEdit}
-              className={`text-xs sm:text-sm font-semibold truncate cursor-pointer transition-colors ${
+              className={`max-w-full text-xs sm:text-sm font-semibold truncate cursor-pointer transition-colors ${
                 isCompleted ? 'text-gray-400 line-through' : 'text-white hover:text-blue-400'
               }`}
             >
               {task.name}
             </h3>
 
-            <div className="flex items-center gap-1.5 shrink-0 flex-wrap">
+            <div className="flex items-center gap-1.5 flex-wrap">
               {task.group && (
                 <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-purple-500/15 text-purple-300 border border-purple-500/30 shrink-0">
                   {task.group}
