@@ -17,7 +17,7 @@ import {
   SearchToggle, FilterButton, SegmentFilter, GroupFilter, ClearFiltersButton, matchesSearch, matchesGroup,
 } from '../components/ListControls';
 import {
-  PlusCircle, ChevronLeft, ChevronRight, Hash, Layers, Grid, Tag, Database, Sparkles, Plus
+  PlusCircle, ChevronLeft, ChevronRight, Hash, Layers, Grid, Tag, Database, Sparkles, Plus, CalendarClock
 } from 'lucide-react';
 import { normalizeDateStr, isHabitMetOn, WEEK_OPTIONS, getExistingGroups } from '../lib/habitUtils';
 import { getSampleHabits } from '../lib/sampleHabits';
@@ -42,17 +42,21 @@ function ToggleChip({ active, onClick, icon, label, activeClass }: {
   return (
     <button
       onClick={onClick}
-      className={`px-2.5 py-1 rounded-lg text-xs font-semibold transition border flex items-center gap-1.5 ${
+      aria-label={`${label} ${active ? 'ON' : 'OFF'}`}
+      title={`${label} ${active ? 'ON' : 'OFF'}`}
+      className={`p-1.5 rounded-lg transition border flex items-center ${
         active ? `${activeClass} shadow-sm` : 'bg-gray-900 text-gray-400 border-gray-800 hover:text-white'
       }`}
     >
       {icon}
-      <span>{label} {active ? 'ON' : 'OFF'}</span>
     </button>
   );
 }
 
 const VIEW_MODES: ViewMode[] = ['day', 'week', 'month', 'year'];
+
+/** The planner starts hidden on phones, where it would push everything else down. */
+const isWideScreen = () => window.matchMedia('(min-width: 768px)').matches;
 
 /** Other pages link here as /?date=YYYY-MM-DD&view=day to open the grid on a specific day. */
 function readInitialView(params: URLSearchParams): { date: Date; view: ViewMode | undefined } {
@@ -99,6 +103,7 @@ function Home() {
   const [cellGroupingEnabled, setCellGroupingEnabled] = usePersistentState(prefKey('cell_grouping'), true);
   const [categoryGroupingEnabled, setCategoryGroupingEnabled] = usePersistentState(prefKey('groups'), true);
   const [showBorders, setShowBorders] = usePersistentState(prefKey('borders'), false);
+  const [showPlanner, setShowPlanner] = usePersistentState(prefKey('planner'), isWideScreen());
 
   // Habit filters (the task list has its own)
   const [searchQuery, setSearchQuery] = useState('');
@@ -254,15 +259,31 @@ function Home() {
             <Plus size={14} />
             <span>New Task</span>
           </button>
+
+          <button
+            type="button"
+            onClick={() => setShowPlanner(!showPlanner)}
+            aria-pressed={showPlanner}
+            className={`px-3.5 py-2 rounded-xl text-xs font-bold transition flex items-center gap-1.5 border active:scale-95 ${
+              showPlanner
+                ? 'bg-[#161924] text-white border-gray-700'
+                : 'bg-gray-900 text-gray-400 hover:text-white border-gray-800'
+            }`}
+          >
+            <CalendarClock size={14} />
+            <span>{showPlanner ? 'Hide planner' : 'Planner'}</span>
+          </button>
         </div>
       </header>
 
-      <div className="grid grid-cols-1 xl:grid-cols-[340px_minmax(0,1fr)] gap-6 items-start">
-        <DailyPlanner
-          highlightedTaskId={hoveredTaskId}
-          onHoverTask={setHoveredTaskId}
-          onEditTask={setEditingTaskId}
-        />
+      <div className={`grid grid-cols-1 gap-6 items-start ${showPlanner ? 'xl:grid-cols-[340px_minmax(0,1fr)]' : ''}`}>
+        {showPlanner && (
+          <DailyPlanner
+            highlightedTaskId={hoveredTaskId}
+            onHoverTask={setHoveredTaskId}
+            onEditTask={setEditingTaskId}
+          />
+        )}
 
         <div className="space-y-6 min-w-0">
           {/* Modals */}
@@ -346,7 +367,8 @@ function Home() {
                       : 'bg-gray-900 hover:bg-gray-800 text-gray-300 hover:text-white border-gray-700'
                       }`}
                   >
-                    Jump to today
+                    <span className="sm:hidden">Today</span>
+                    <span className="hidden sm:inline">Jump to today</span>
                   </button>
 
                   <SearchToggle value={searchQuery} onChange={setSearchQuery} label="Search habits" />
@@ -364,7 +386,7 @@ function Home() {
                     <ToggleChip
                       active={showNumbers}
                       onClick={() => setShowNumbers(!showNumbers)}
-                      icon={<Hash size={13} />}
+                      icon={<Hash size={15} />}
                       label="Numbers"
                       activeClass="bg-blue-600/20 text-blue-400 border-blue-500/40"
                     />
@@ -372,7 +394,7 @@ function Home() {
                   <ToggleChip
                     active={categoryGroupingEnabled}
                     onClick={() => setCategoryGroupingEnabled(!categoryGroupingEnabled)}
-                    icon={<Tag size={13} />}
+                    icon={<Tag size={15} />}
                     label="Groups"
                     activeClass="bg-purple-600/20 text-purple-400 border-purple-500/40"
                   />
@@ -380,7 +402,7 @@ function Home() {
                     <ToggleChip
                       active={cellGroupingEnabled}
                       onClick={() => setCellGroupingEnabled(!cellGroupingEnabled)}
-                      icon={<Layers size={13} />}
+                      icon={<Layers size={15} />}
                       label="Cell Grouping"
                       activeClass="bg-indigo-600/20 text-indigo-400 border-indigo-500/40"
                     />
@@ -389,7 +411,7 @@ function Home() {
                     <ToggleChip
                       active={showBorders}
                       onClick={() => setShowBorders(!showBorders)}
-                      icon={<Grid size={13} />}
+                      icon={<Grid size={15} />}
                       label="Borders"
                       activeClass="bg-emerald-600/20 text-emerald-400 border-emerald-500/40"
                     />
@@ -460,7 +482,7 @@ function Home() {
                 {!isWideView && canScrollLeft && (
                   <button
                     onClick={() => scrollDays('left')}
-                    className={`absolute top-1/2 -translate-y-1/2 z-30 w-7 h-7 bg-gray-900/95 hover:bg-blue-600 text-white rounded-full flex items-center justify-center shadow-2xl border border-gray-700 hover:border-blue-500 backdrop-blur-md transition-all hover:scale-110 ${viewMode === 'week' ? 'left-[235px] sm:left-[275px] md:left-[295px]' : 'left-[385px] sm:left-[465px] md:left-[525px]'
+                    className={`absolute top-1/2 -translate-y-1/2 z-30 w-7 h-7 bg-gray-900/95 hover:bg-blue-600 text-white rounded-full flex items-center justify-center shadow-2xl border border-gray-700 hover:border-blue-500 backdrop-blur-md transition-all hover:scale-110 ${viewMode === 'week' ? 'left-[60px] md:left-[295px]' : 'left-[60px] md:left-[525px]'
                       }`}
                   >
                     <ChevronLeft size={16} />
@@ -490,7 +512,9 @@ function Home() {
                         </div>
                       ) : (
                         <div className={`${leftColumnClass(viewMode)} shrink-0 flex items-center justify-between px-3 py-2 border-r border-gray-800 text-[11px] font-bold text-gray-400 uppercase tracking-wider h-full`}>
-                          <span>Recurring Habits ({filteredRecurringHabits.length})</span>
+                          <span className="truncate">
+                            <span className="hidden md:inline">Recurring Habits ({filteredRecurringHabits.length})</span>
+                          </span>
                         </div>
                       )}
 

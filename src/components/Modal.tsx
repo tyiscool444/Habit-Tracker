@@ -28,9 +28,10 @@ export function Modal({ isOpen, onClose, maxWidth = 'max-w-md', children }: Prop
   return createPortal(
     <div
       onClick={onClose}
-      className="fixed inset-0 bg-black/75 backdrop-blur-md z-50 flex items-center justify-center p-4 cursor-pointer animate-in fade-in duration-200"
+      className="fixed inset-0 bg-black/75 backdrop-blur-md z-50 flex overflow-y-auto p-4 cursor-pointer animate-in fade-in duration-200"
     >
-      <div onClick={(e) => e.stopPropagation()} className={`cursor-default w-full ${maxWidth}`}>
+      {/* m-auto centres it, but lets a tall dialog start at the top and scroll */}
+      <div onClick={(e) => e.stopPropagation()} className={`m-auto cursor-default w-full ${maxWidth}`}>
         {children}
       </div>
     </div>,

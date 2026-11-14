@@ -319,7 +319,7 @@ export function CalendarView({ habits, onEditTask, onUpdateTask, onGoToDate }: P
                         </span>
                       )}
                       {partial && (
-                        <span className="text-[9px] font-bold text-gray-400">{info!.met}/{info!.total}</span>
+                        <span className="hidden sm:inline text-[9px] font-bold text-gray-400">{info!.met}/{info!.total}</span>
                       )}
                       {missed && <span className="w-1.5 h-1.5 rounded-full bg-gray-700" />}
                     </div>

@@ -28,8 +28,9 @@ interface Props {
 /** Width of the habit name column; shared with the table header in page.tsx. */
 export function leftColumnClass(viewMode: ViewMode): string {
   if (viewMode === 'month' || viewMode === 'year') return 'w-14 min-w-[56px] max-w-[56px]';
-  if (viewMode === 'week') return 'w-[230px] sm:w-[270px] md:w-[290px] min-w-[220px]';
-  return 'w-[380px] sm:w-[460px] md:w-[520px] min-w-[340px]';
+  // Below md (phones) only the icon is shown, so the column is as narrow as month / year
+  if (viewMode === 'week') return 'w-14 min-w-[56px] md:w-[290px] md:min-w-[220px]';
+  return 'w-14 min-w-[56px] md:w-[520px] md:min-w-[340px]';
 }
 
 const PERIOD_WORD = { daily: 'today', weekly: 'this week', monthly: 'this month' } as const;
@@ -392,65 +393,69 @@ export function HabitCard({
           <div className="flex items-center justify-center w-full">{habitIcon}</div>
         ) : (
           <>
-            <div className="flex items-center gap-2 min-w-0 flex-1 mr-2">
-              {habitIcon}
+            {/* Phones: icon only, like month / year, so the day cells get the room */}
+            <div className="md:hidden flex items-center justify-center w-full">{habitIcon}</div>
+            <div className="hidden md:contents">
+              <div className="flex items-center gap-2 min-w-0 flex-1 mr-2">
+                {habitIcon}
 
-              <div className="flex items-center gap-1.5 min-w-0 flex-1">
-                <h3
-                  onClick={onOpenInsights || onEdit}
-                  className="text-xs sm:text-sm font-semibold text-white hover:text-blue-400 cursor-pointer transition-colors truncate"
+                <div className="flex items-center gap-1.5 min-w-0 flex-1">
+                  <h3
+                    onClick={onOpenInsights || onEdit}
+                    className="text-xs sm:text-sm font-semibold text-white hover:text-blue-400 cursor-pointer transition-colors truncate"
+                  >
+                    {habit.name}
+                  </h3>
+                  {isComplete && (
+                    <div className="hidden sm:flex shrink-0 w-3.5 h-3.5 rounded-full bg-green-500/20 text-green-400 items-center justify-center border border-green-500/40">
+                      <Check size={9} strokeWidth={3} />
+                    </div>
+                  )}
+
+                  {/* Active timer badge, or a quick-start button on hover */}
+                  {isHabitActiveHere ? (
+                    <button
+                      onClick={(e) => { e.stopPropagation(); toggleTimer(); }}
+                      className={`flex items-center gap-1 text-[10px] font-mono font-bold px-1.5 py-0.5 rounded-full border transition shrink-0 shadow-sm ${
+                        isHabitRunningHere
+                          ? 'text-emerald-400 bg-emerald-500/20 border-emerald-500/40 animate-pulse hover:bg-emerald-500/30'
+                          : 'text-amber-300 bg-amber-500/20 border-amber-500/40 hover:bg-amber-500/30'
+                      }`}
+                    >
+                      {isHabitRunningHere ? <Pause size={8} fill="currentColor" /> : <Play size={8} fill="currentColor" />}
+                      <span>{formatTime(elapsedSeconds)}</span>
+                    </button>
+                  ) : isTimeBased && (
+                    <button
+                      onClick={(e) => { e.stopPropagation(); startTimer(habit); }}
+                      className="opacity-0 group-hover:opacity-100 text-gray-400 hover:text-emerald-400 p-0.5 rounded hover:bg-gray-800 transition shrink-0"
+                    >
+                      <Play size={10} fill="currentColor" />
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              <div className="hidden sm:flex items-center gap-1.5 shrink-0 ml-auto">
+                <span
+                  onClick={onEdit}
+                  className={`border px-2 py-0.5 rounded text-[10px] sm:text-[11px] font-semibold whitespace-nowrap shrink-0 transition-colors cursor-pointer hover:brightness-125 ${quotaBadgeStyle}`}
                 >
-                  {habit.name}
-                </h3>
-                {isComplete && (
-                  <div className="shrink-0 w-3.5 h-3.5 rounded-full bg-green-500/20 text-green-400 flex items-center justify-center border border-green-500/40">
-                    <Check size={9} strokeWidth={3} />
-                  </div>
-                )}
+                  {quotaBadgeLabel}
+                </span>
 
-                {/* Active timer badge, or a quick-start button on hover */}
-                {isHabitActiveHere ? (
-                  <button
-                    onClick={(e) => { e.stopPropagation(); toggleTimer(); }}
-                    className={`flex items-center gap-1 text-[10px] font-mono font-bold px-1.5 py-0.5 rounded-full border transition shrink-0 shadow-sm ${
-                      isHabitRunningHere
-                        ? 'text-emerald-400 bg-emerald-500/20 border-emerald-500/40 animate-pulse hover:bg-emerald-500/30'
-                        : 'text-amber-300 bg-amber-500/20 border-amber-500/40 hover:bg-amber-500/30'
-                    }`}
+                {currentStreak > 0 ? (
+                  <span
+                    onClick={onOpenInsights}
+                    className="text-[11px] sm:text-xs font-bold text-orange-400 flex items-center gap-0.5 shrink-0 min-w-[32px] justify-end cursor-pointer hover:scale-105 transition"
                   >
-                    {isHabitRunningHere ? <Pause size={8} fill="currentColor" /> : <Play size={8} fill="currentColor" />}
-                    <span>{formatTime(elapsedSeconds)}</span>
-                  </button>
-                ) : isTimeBased && (
-                  <button
-                    onClick={(e) => { e.stopPropagation(); startTimer(habit); }}
-                    className="opacity-0 group-hover:opacity-100 text-gray-400 hover:text-emerald-400 p-0.5 rounded hover:bg-gray-800 transition shrink-0"
-                  >
-                    <Play size={10} fill="currentColor" />
-                  </button>
+                    <Flame size={11} className="text-orange-500" />
+                    {currentStreak}{timeframeSuffix(habit.timeframe)}
+                  </span>
+                ) : (
+                  <div className="w-[32px] shrink-0" />
                 )}
               </div>
-            </div>
-
-            <div className="flex items-center gap-1.5 shrink-0 ml-auto">
-              <span
-                onClick={onEdit}
-                className={`border px-2 py-0.5 rounded text-[10px] sm:text-[11px] font-semibold whitespace-nowrap shrink-0 transition-colors cursor-pointer hover:brightness-125 ${quotaBadgeStyle}`}
-              >
-                {quotaBadgeLabel}
-              </span>
-
-              {currentStreak > 0 ? (
-                <span
-                  onClick={onOpenInsights}
-                  className="text-[11px] sm:text-xs font-bold text-orange-400 flex items-center gap-0.5 shrink-0 min-w-[32px] justify-end cursor-pointer hover:scale-105 transition"
-                >
-                  <Flame size={11} className="text-orange-500" />
-                  {currentStreak}{timeframeSuffix(habit.timeframe)}
-                </span>
-              ) : (
-                <div className="w-[32px] shrink-0" />
-              )}
             </div>
           </>
         )}

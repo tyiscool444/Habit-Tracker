@@ -5,7 +5,7 @@ import { HabitsProvider } from '../context/HabitsContext';
 import { PlannerProvider } from '../context/PlannerContext';
 import { TimerProvider } from '../context/TimerContext';
 import { SyncProvider } from '../context/SyncContext';
-import { Sidebar } from './Sidebar';
+import { Sidebar, MobileNav } from './Sidebar';
 import { PasswordGate } from './PasswordGate';
 import { FloatingTimerWidget } from './FloatingTimerWidget';
 
@@ -27,8 +27,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             <TimerProvider>
               <div className="min-h-screen flex bg-[#07080a] text-slate-100 font-sans selection:bg-blue-600/30">
                 <Sidebar />
-                <main className="flex-1 min-w-0 p-4 sm:p-6 lg:p-8">{children}</main>
+                {/* Extra bottom padding on phones clears the tab bar */}
+                <main className="flex-1 min-w-0 p-4 sm:p-6 lg:p-8 pb-28 md:pb-8">{children}</main>
               </div>
+              <MobileNav />
               <FloatingTimerWidget />
             </TimerProvider>
           </PasswordGate>

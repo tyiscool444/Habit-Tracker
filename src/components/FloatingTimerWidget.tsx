@@ -33,7 +33,7 @@ export function FloatingTimerWidget() {
   const handleOpen = () => router.push('/timers');
 
   return (
-    <div className="fixed bottom-5 right-5 z-40 animate-in slide-in-from-bottom-5 duration-300">
+    <div className="fixed bottom-24 right-3 md:bottom-5 md:right-5 z-40 animate-in slide-in-from-bottom-5 duration-300">
       <div 
         className="flex items-center gap-3 bg-[#0d1017]/95 border rounded-2xl p-3 shadow-2xl backdrop-blur-xl transition-all"
         style={{

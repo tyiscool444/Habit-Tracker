@@ -37,3 +37,12 @@ input[type="number"] {
   -ms-overflow-style: none;
   scrollbar-width: none;
 }
+
+/* Phones zoom in on inputs smaller than 16px when focused; keep them at 16px on touch screens */
+@media (pointer: coarse) {
+  input,
+  select,
+  textarea {
+    font-size: 16px !important;
+  }
+}
